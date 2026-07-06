@@ -2,25 +2,28 @@
   "name": "tapulan",
   "version": "1.0.0",
   "private": true,
-  "description": "Linear-style school work tracker for PH Senior High strands (ABM · HUMSS · STEM)",
-  "homepage": "https://tapulan.com",
+  "description": "Class schedule + requirements tracker for a PH Senior High section (STEM · ABM · HUMSS)",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "lint": "next lint",
-    "preview": "npx serve@latest out"
+    "start": "next start",
+    "lint": "next lint"
   },
   "dependencies": {
+    "better-sqlite3": "^12.4.1",
     "clsx": "^2.1.1",
+    "geist": "^1.5.1",
     "lucide-react": "^0.469.0",
     "next": "^15.3.4",
     "next-themes": "^0.4.6",
     "react": "^19.1.0",
-    "react-dom": "^19.1.0"
+    "react-dom": "^19.1.0",
+    "server-only": "^0.0.1"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.1",
     "@tailwindcss/postcss": "^4.1.10",
+    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^22.15.0",
     "@types/react": "^19.1.0",
     "@types/react-dom": "^19.1.0",

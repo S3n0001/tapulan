@@ -8,6 +8,9 @@
 /out/
 next-env.d.ts
 
+# local SQLite database (seeded on first run)
+/data/
+
 # production
 /build
 

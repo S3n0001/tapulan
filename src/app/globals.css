@@ -1,0 +1,506 @@
+@import "tailwindcss";
+
+/* next-themes drives the theme with a class on <html>. Dark is the default. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ============================================================ tokens */
+
+:root {
+  color-scheme: light;
+
+  /* neutral architecture — shell (app chrome) sits behind bg (content panel);
+     pop is the overlay surface (menus/palette/toast/dialogs), a notch above. */
+  --shell: oklch(0.962 0.002 265);
+  --bg: oklch(0.995 0 0);
+  --surface: oklch(0.972 0.002 265);
+  --surface-2: oklch(0.945 0.003 265);
+  --pop: oklch(0.998 0 0);
+  --ink: oklch(0.215 0.012 265);
+  --muted: oklch(0.455 0.012 265);
+  --faint: oklch(0.55 0.01 265); /* ≥4.5:1 on --bg — micro-meta stays AA */
+  --line: oklch(0.918 0.003 265);
+  --line-strong: oklch(0.865 0.004 265);
+
+  /* cobalt — the one interactive signal (fills carry white text) */
+  --brand: oklch(0.5 0.16 252);
+  --brand-hover: oklch(0.45 0.16 252);
+  --brand-text: oklch(0.47 0.15 252);
+  --on-brand: oklch(0.99 0 0);
+  --ring: oklch(0.5 0.16 252);
+
+  /* semantic states */
+  --ok: oklch(0.55 0.13 160);
+  --ok-text: oklch(0.5 0.12 160);
+  --warn: oklch(0.66 0.14 70);
+  --warn-text: oklch(0.52 0.12 70);
+  --danger: oklch(0.56 0.2 27);
+  --danger-text: oklch(0.52 0.2 27);
+  --on-danger: oklch(0.99 0 0);
+
+  /* functional hue ramp — text-grade against tints over bg */
+  --h-red: oklch(0.53 0.2 27);
+  --h-orange: oklch(0.51 0.15 52);
+  --h-amber: oklch(0.52 0.12 75);
+  --h-lime: oklch(0.5 0.14 128);
+  --h-emerald: oklch(0.5 0.13 162);
+  --h-teal: oklch(0.49 0.1 195);
+  --h-cyan: oklch(0.49 0.11 218);
+  --h-sky: oklch(0.49 0.13 240);
+  --h-blue: oklch(0.52 0.17 258);
+  --h-indigo: oklch(0.5 0.18 274);
+  --h-violet: oklch(0.53 0.19 300);
+  --h-fuchsia: oklch(0.54 0.21 328);
+  --h-rose: oklch(0.52 0.19 8);
+  --h-slate: oklch(0.5 0.03 265);
+
+  /* accent tint strengths (mixed with bg/surface) */
+  --tint: 9%;
+  --tint-2: 13%;
+  --tint-active: 19%;
+
+  /* shape */
+  --r-panel: 10px;
+  --r-card: 8px;
+  --r-control: 6px;
+  --r-chip: 999px;
+
+  /* motion */
+  --ease: cubic-bezier(0.16, 1, 0.3, 1);          /* signature overshoot — pop-in only */
+  --ease-out: cubic-bezier(0.33, 1, 0.68, 1);     /* exits, snappy */
+  --ease-in: cubic-bezier(0.32, 0, 0.67, 0);      /* leave / sheet-down */
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);  /* hover / general */
+  --dur-0: 70ms;                                  /* press feedback */
+  --dur-1: 120ms;
+  --dur-2: 180ms;
+  --dur-3: 240ms;
+
+  /* overlay depth */
+  --shadow-pop: 0 1px 2px oklch(0.2 0.02 265 / 0.05), 0 8px 24px oklch(0.2 0.02 265 / 0.12);
+  --shadow-overlay: 0 2px 6px oklch(0.15 0.02 265 / 0.08), 0 16px 48px oklch(0.15 0.02 265 / 0.22);
+}
+
+.dark {
+  color-scheme: dark;
+
+  /* neutral architecture — near-black, near-neutral. shell = void behind the
+     elevated bg panel; pop = overlay surface (menus/palette/toast/dialogs). */
+  --shell: oklch(0.145 0.003 265);      /* app void, ~#0B0C0D */
+  --bg: oklch(0.178 0.003 265);         /* content panel, elevated, ~#0E0F11 */
+  --surface: oklch(0.205 0.0035 265);   /* cards / inputs on bg */
+  --surface-2: oklch(0.245 0.004 265);  /* active nav / hover-2 */
+  --pop: oklch(0.222 0.004 265);        /* overlays: one step above surface */
+
+  --ink: oklch(0.945 0.003 265);        /* primary ~#EEEFF1 */
+  --muted: oklch(0.715 0.006 265);      /* secondary ~#8A8F98 */
+  --faint: oklch(0.605 0.007 265);      /* tertiary ~#6A6F78 */
+
+  /* hairlines — translucent white, Linear ~7% / ~11% */
+  --line: oklch(1 0 0 / 0.07);
+  --line-strong: oklch(1 0 0 / 0.11);
+
+  /* cobalt — the one signal */
+  --brand: oklch(0.56 0.17 252);
+  --brand-hover: oklch(0.62 0.16 252);
+  --brand-text: oklch(0.78 0.11 252);
+  --on-brand: oklch(0.99 0 0);
+  --ring: oklch(0.64 0.16 252);
+
+  /* semantic states — lifted for the darker ground */
+  --ok: oklch(0.73 0.14 162);
+  --ok-text: oklch(0.8 0.13 162);
+  --warn: oklch(0.8 0.13 78);
+  --warn-text: oklch(0.85 0.12 82);
+  --danger: oklch(0.64 0.2 27);
+  --danger-text: oklch(0.74 0.17 27);
+  --on-danger: oklch(0.99 0 0);
+
+  /* 14-hue functional ramp — text-grade, legible on the darker ground */
+  --h-red: oklch(0.71 0.16 25);
+  --h-orange: oklch(0.76 0.14 58);
+  --h-amber: oklch(0.82 0.13 82);
+  --h-lime: oklch(0.8 0.16 128);
+  --h-emerald: oklch(0.77 0.13 162);
+  --h-teal: oklch(0.77 0.1 195);
+  --h-cyan: oklch(0.79 0.11 218);
+  --h-sky: oklch(0.76 0.12 240);
+  --h-blue: oklch(0.72 0.13 258);
+  --h-indigo: oklch(0.7 0.14 274);
+  --h-violet: oklch(0.74 0.15 300);
+  --h-fuchsia: oklch(0.77 0.17 328);
+  --h-rose: oklch(0.75 0.15 8);
+  --h-slate: oklch(0.72 0.02 265);
+
+  /* tints bumped to hold subject color over the lower-chroma ground */
+  --tint: 16%;
+  --tint-2: 23%;
+  --tint-active: 30%;
+
+  /* overlays lean on the hairline border for separation on near-black */
+  --shadow-pop: 0 1px 2px oklch(0 0 0 / 0.5), 0 6px 20px oklch(0 0 0 / 0.55);
+  --shadow-overlay: 0 2px 6px oklch(0 0 0 / 0.45), 0 16px 44px oklch(0 0 0 / 0.6);
+}
+
+/* ============================================ Tailwind token mapping */
+
+@theme inline {
+  --color-shell: var(--shell);
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-pop: var(--pop);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-faint: var(--faint);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+
+  --color-brand: var(--brand);
+  --color-brand-hover: var(--brand-hover);
+  --color-brand-text: var(--brand-text);
+  --color-on-brand: var(--on-brand);
+
+  --color-ok: var(--ok);
+  --color-ok-text: var(--ok-text);
+  --color-warn: var(--warn);
+  --color-warn-text: var(--warn-text);
+  --color-danger: var(--danger);
+  --color-danger-text: var(--danger-text);
+  --color-on-danger: var(--on-danger);
+
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, "SF Mono", monospace;
+
+  --radius-panel: var(--r-panel);
+  --radius-card: var(--r-card);
+  --radius-control: var(--r-control);
+  --radius-chip: var(--r-chip);
+
+  --ease-out-quint: var(--ease);
+}
+
+/* ==================================================== base styles */
+
+@layer base {
+  * {
+    border-color: var(--line);
+  }
+
+  html {
+    -webkit-tap-highlight-color: transparent;
+    -webkit-text-size-adjust: 100%;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    background-color: var(--shell);
+    color: var(--ink);
+    font-feature-settings: "cv01", "cv03", "ss03";
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  ::selection {
+    background: color-mix(in oklab, var(--brand) 28%, transparent);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 1px;
+  }
+
+  input,
+  textarea,
+  select {
+    font: inherit;
+  }
+
+  /* tabular, monospaced numerals wherever counts and times appear */
+  .tnum {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+  }
+
+  /* thin, theme-aware scrollbars for desktop panels */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--line-strong) transparent;
+  }
+  *::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  *::-webkit-scrollbar-thumb {
+    background: var(--line-strong);
+    border-radius: 999px;
+  }
+}
+
+/* ================================================ accent utilities */
+/*
+ * A component sets `--a` (via accentStyle(hue)) to a functional hue token,
+ * then these utilities derive every surface it needs. Text never sits on a
+ * raw hue fill — tinted backgrounds carry hue-colored text so both themes
+ * stay legible without per-theme juggling.
+ */
+@layer utilities {
+  .a-text {
+    color: var(--a);
+  }
+  .a-dot {
+    background-color: var(--a);
+  }
+  .a-bar {
+    background-color: var(--a);
+  }
+  .a-border {
+    border-color: color-mix(in oklab, var(--a) 38%, var(--line));
+  }
+  .a-tint {
+    background-color: color-mix(in oklab, var(--a) var(--tint), var(--bg));
+  }
+  .a-tint-2 {
+    background-color: color-mix(in oklab, var(--a) var(--tint-2), var(--bg));
+  }
+  .a-tint-active {
+    background-color: color-mix(in oklab, var(--a) var(--tint-active), var(--bg));
+  }
+  .a-ring {
+    box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--a) 32%, transparent);
+  }
+
+  /* diagonal hatching — breaks and non-class slabs on the week canvas */
+  .hatch {
+    background-image: repeating-linear-gradient(
+      -45deg,
+      color-mix(in oklab, var(--ink) 5%, transparent) 0 1px,
+      transparent 1px 7px
+    );
+  }
+
+  .no-scrollbar {
+    scrollbar-width: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* clamp long details/notes to N lines */
+  .clamp-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .clamp-3 {
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  /* press + tap feedback — the physical "give" on click */
+  .press {
+    transition: transform var(--dur-0) var(--ease-standard);
+  }
+  .press:active {
+    transform: scale(0.97);
+  }
+  .tap {
+    transition:
+      background-color var(--dur-1) var(--ease-standard),
+      color var(--dur-1) var(--ease-standard),
+      border-color var(--dur-1) var(--ease-standard),
+      transform var(--dur-0) var(--ease-standard);
+  }
+  .tap:active {
+    transform: scale(0.98);
+  }
+}
+
+/* ========================================================= motion */
+
+@keyframes pulse-ring {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in oklab, var(--ok) 55%, transparent);
+  }
+  70% {
+    box-shadow: 0 0 0 6px color-mix(in oklab, var(--ok) 0%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in oklab, var(--ok) 0%, transparent);
+  }
+}
+.live-dot {
+  animation: pulse-ring 2.4s ease-in-out infinite;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes sheet-up {
+  from {
+    transform: translateY(100%);
+  }
+}
+@keyframes panel-in {
+  from {
+    opacity: 0.4;
+    transform: translateX(24px);
+  }
+}
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(3px) scale(0.985);
+  }
+}
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+.anim-fade {
+  animation: fade-in var(--dur-2) var(--ease);
+}
+.anim-sheet {
+  animation: sheet-up var(--dur-3) var(--ease);
+}
+.anim-panel {
+  animation: panel-in var(--dur-2) var(--ease);
+}
+.anim-pop {
+  animation: pop-in var(--dur-1) var(--ease);
+}
+.anim-toast {
+  animation: toast-in var(--dur-2) var(--ease);
+}
+
+/* ---- exits (driven by data-state="closed" via usePresence) ---- */
+@keyframes pop-out {
+  to {
+    opacity: 0;
+    transform: translateY(2px) scale(0.985);
+  }
+}
+@keyframes fade-out {
+  to {
+    opacity: 0;
+  }
+}
+@keyframes sheet-down {
+  to {
+    transform: translateY(100%);
+  }
+}
+@keyframes panel-out {
+  to {
+    opacity: 0;
+    transform: translateX(16px);
+  }
+}
+
+[data-state="closed"].anim-pop {
+  animation: pop-out var(--dur-1) var(--ease-out) forwards;
+}
+[data-state="closed"].anim-fade {
+  animation: fade-out var(--dur-1) var(--ease-out) forwards;
+}
+[data-state="closed"].anim-sheet {
+  animation: sheet-down var(--dur-2) var(--ease-in) forwards;
+}
+[data-state="closed"].anim-panel {
+  animation: panel-out var(--dur-1) var(--ease-out) forwards;
+}
+[data-state="closed"].anim-toast {
+  animation: fade-out var(--dur-1) var(--ease-out) forwards;
+}
+
+/* ---- the detail overlay: bottom sheet on mobile, side peek on desktop ---- */
+.anim-detail {
+  animation: sheet-up var(--dur-3) var(--ease);
+}
+[data-state="closed"].anim-detail {
+  animation: sheet-down var(--dur-2) var(--ease-in) forwards;
+}
+@media (min-width: 64rem) {
+  .anim-detail {
+    animation: panel-in var(--dur-2) var(--ease);
+  }
+  [data-state="closed"].anim-detail {
+    animation: panel-out var(--dur-1) var(--ease-out) forwards;
+  }
+}
+
+/* ---- done-check tick ---- */
+@keyframes check-pop {
+  0% {
+    transform: scale(0.6);
+  }
+  60% {
+    transform: scale(1.08);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+@keyframes tick-draw {
+  from {
+    stroke-dashoffset: 16;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+.done-pop {
+  animation: check-pop var(--dur-2) var(--ease);
+}
+.done-tick {
+  stroke-dasharray: 16;
+  animation: tick-draw var(--dur-2) var(--ease-out) both;
+}
+
+/* ---- route content ---- */
+@keyframes view-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+.anim-view {
+  animation: view-in var(--dur-2) var(--ease-out);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+  .live-dot {
+    animation: none;
+  }
+  .press:active,
+  .tap:active,
+  [class*="active:scale"] {
+    transform: none !important;
+  }
+  [data-state="closed"].anim-pop,
+  [data-state="closed"].anim-fade,
+  [data-state="closed"].anim-sheet,
+  [data-state="closed"].anim-panel,
+  [data-state="closed"].anim-detail,
+  [data-state="closed"].anim-toast {
+    animation: none !important;
+  }
+  .anim-view,
+  .done-tick,
+  .done-pop {
+    animation: none !important;
+  }
+}
