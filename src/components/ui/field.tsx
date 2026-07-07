@@ -1,8 +1,12 @@
 "use client";
 
 import {
+  cloneElement,
   forwardRef,
+  isValidElement,
+  useId,
   type InputHTMLAttributes,
+  type ReactElement,
   type ReactNode,
   type SelectHTMLAttributes,
   type TextareaHTMLAttributes,
@@ -27,6 +31,16 @@ export function Field({
   children: ReactNode;
   className?: string;
 }) {
+  const errorId = useId();
+  // when an error is present, wire the control to it so a screen reader
+  // announces it and knows which field is invalid (WCAG 3.3.1 / 1.3.1)
+  const control =
+    error && isValidElement(children)
+      ? cloneElement(children as ReactElement<{ "aria-invalid"?: boolean; "aria-describedby"?: string }>, {
+          "aria-invalid": true,
+          "aria-describedby": errorId,
+        })
+      : children;
   return (
     <div className={cn("space-y-1.5", className)}>
       <label
@@ -41,8 +55,12 @@ export function Field({
         )}
         {hint && <span className="font-normal text-faint">· {hint}</span>}
       </label>
-      {children}
-      {error && <p className="text-[12px] text-danger-text">{error}</p>}
+      {control}
+      {error && (
+        <p id={errorId} role="alert" className="text-[12px] text-danger-text">
+          {error}
+        </p>
+      )}
     </div>
   );
 }

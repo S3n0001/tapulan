@@ -24,6 +24,7 @@ export function Panel({
   footer,
   children,
   wide = false,
+  onCmdEnter,
 }: {
   open: boolean;
   onClose: () => void;
@@ -33,6 +34,8 @@ export function Panel({
   children: ReactNode;
   /** 480px editors vs 408px detail views (desktop only) */
   wide?: boolean;
+  /** editors: ⌘/Ctrl+Enter saves from anywhere inside the panel */
+  onCmdEnter?: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const restoreRef = useRef<HTMLElement | null>(null);
@@ -62,13 +65,18 @@ export function Panel({
     };
   }, [open]);
 
-  // escape + tab trap
+  // escape + save shortcut + tab trap
   useEffect(() => {
     if (!open) return;
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") {
         e.stopPropagation();
         onClose();
+        return;
+      }
+      if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && onCmdEnter) {
+        e.preventDefault();
+        onCmdEnter();
         return;
       }
       if (e.key !== "Tab" || !ref.current) return;
@@ -89,7 +97,7 @@ export function Panel({
     }
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
+  }, [open, onClose, onCmdEnter]);
 
   if (!mounted || typeof document === "undefined") return null;
 

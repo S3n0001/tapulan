@@ -109,6 +109,7 @@ export function SubjectEditor({
 
   return (
     <Panel
+      onCmdEnter={submit}
       open={open}
       onClose={onClose}
       wide

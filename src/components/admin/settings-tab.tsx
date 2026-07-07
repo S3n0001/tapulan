@@ -1,12 +1,15 @@
 "use client";
 
 import { useRef, useState, useTransition, type ReactNode } from "react";
-import { Download, KeyRound, RotateCcw, Upload } from "lucide-react";
+import { Copy, Download, KeyRound, Plus, RotateCcw, Terminal, Trash2, Upload } from "lucide-react";
 import { changePassword, updateSettings } from "@/actions/admin";
 import { getBackup, importBackup, resetToSeed } from "@/actions/backup";
+import { createCliToken, revokeCliToken } from "@/actions/tokens";
+import type { ApiToken } from "@/lib/auth/tokens";
 import type { Settings } from "@/lib/domain/types";
-import { toISODate } from "@/lib/domain/time";
+import { fmtDateShort, toISODate } from "@/lib/domain/time";
 import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/ui/icon-button";
 import { Field, Input } from "@/components/ui/field";
 import { useToast } from "@/components/ui/toast";
 import { useConfirm } from "@/components/ui/confirm";
@@ -34,9 +37,11 @@ function Section({
 export function SettingsTab({
   settings,
   counts,
+  tokens,
 }: {
   settings: Settings;
   counts: { tasks: number; periods: number; subjects: number };
+  tokens: ApiToken[];
 }) {
   const toast = useToast();
   const confirm = useConfirm();
@@ -46,6 +51,8 @@ export function SettingsTab({
   const [schoolYear, setSchoolYear] = useState(settings.schoolYear);
   const [currentPw, setCurrentPw] = useState("");
   const [nextPw, setNextPw] = useState("");
+  const [tokenLabel, setTokenLabel] = useState("");
+  const [minted, setMinted] = useState<{ id: number; token: string } | null>(null);
   const importRef = useRef<HTMLInputElement>(null);
 
   function saveIdentity() {
@@ -63,6 +70,45 @@ export function SettingsTab({
         toast.success("Password changed");
         setCurrentPw("");
         setNextPw("");
+      } else toast.error(res.error);
+    });
+  }
+
+  function mintToken() {
+    start(async () => {
+      const res = await createCliToken(tokenLabel);
+      if (res.ok) {
+        setMinted({ id: res.data.meta.id, token: res.data.token });
+        setTokenLabel("");
+        toast.success("Token created — copy it now");
+      } else toast.error(res.error);
+    });
+  }
+
+  async function copyMinted() {
+    if (!minted) return;
+    try {
+      await navigator.clipboard.writeText(minted.token);
+      toast.success("Copied to clipboard");
+    } catch {
+      toast.error("Couldn't copy — select the token manually.");
+    }
+  }
+
+  async function runRevoke(token: ApiToken) {
+    const yes = await confirm({
+      title: `Revoke “${token.label}”?`,
+      description:
+        "That terminal stops working immediately. Pair it again anytime with `tapulan login`.",
+      confirmLabel: "Revoke",
+      danger: true,
+    });
+    if (!yes) return;
+    start(async () => {
+      const res = await revokeCliToken(token.id);
+      if (res.ok) {
+        if (minted?.id === token.id) setMinted(null);
+        toast.success("Token revoked");
       } else toast.error(res.error);
     });
   }
@@ -181,6 +227,85 @@ export function SettingsTab({
             >
               <KeyRound className="size-3.5" />
               Change password
+            </Button>
+          </div>
+        </div>
+      </Section>
+
+      <Section
+        title="CLI access"
+        hint="Post tasks from a terminal — `tapulan login` pairs a machine and lists its token here."
+      >
+        <div className="space-y-3">
+          {minted && (
+            <div className="rounded-[var(--r-card)] border border-[color-mix(in_oklab,var(--warn)_45%,var(--line))] bg-[color-mix(in_oklab,var(--warn)_9%,var(--surface))] p-2.5">
+              <p className="text-[12px] font-medium text-warn-text">
+                Copy this token now — it won&apos;t be shown again.
+              </p>
+              <div className="mt-2 flex items-center gap-2">
+                <Input
+                  readOnly
+                  aria-label="New CLI token"
+                  value={minted.token}
+                  className="flex-1 font-mono text-[12px]"
+                  onFocus={(e) => e.currentTarget.select()}
+                />
+                <Button variant="secondary" onClick={copyMinted}>
+                  <Copy className="size-3.5" />
+                  Copy
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {tokens.length === 0 ? (
+            <p className="text-[12px] text-faint">
+              No tokens yet — create one here, or run <code className="font-mono">tapulan login</code> from
+              a terminal.
+            </p>
+          ) : (
+            <ul className="divide-y divide-line/70 rounded-[var(--r-card)] border border-line">
+              {tokens.map((t) => (
+                <li key={t.id} className="flex items-center gap-2.5 px-2.5 py-2">
+                  <Terminal className="size-3.5 shrink-0 text-faint" aria-hidden />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[12.5px] font-medium text-ink">
+                      {t.label}
+                    </span>
+                    <span className="tnum block font-mono text-[10.5px] text-faint">
+                      created {fmtDateShort(t.createdAt.slice(0, 10))} ·{" "}
+                      {t.lastUsedAt
+                        ? `last used ${fmtDateShort(t.lastUsedAt.slice(0, 10))}`
+                        : "never used"}
+                    </span>
+                  </span>
+                  <IconButton aria-label={`Revoke ${t.label}`} onClick={() => runRevoke(t)}>
+                    <Trash2 className="size-3.5" />
+                  </IconButton>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          <div className="flex gap-2">
+            <Input
+              aria-label="New token label"
+              value={tokenLabel}
+              placeholder="Label — e.g. Ana's laptop"
+              className="flex-1"
+              onChange={(e) => setTokenLabel(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && tokenLabel.trim()) mintToken();
+              }}
+            />
+            <Button
+              variant="secondary"
+              loading={pending}
+              disabled={!tokenLabel.trim()}
+              onClick={mintToken}
+            >
+              <Plus className="size-3.5" />
+              Create token
             </Button>
           </div>
         </div>

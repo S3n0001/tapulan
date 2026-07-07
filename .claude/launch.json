@@ -9,6 +9,14 @@
       "autoPort": true
     },
     {
+      "name": "dev-isolated",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "env": { "NEXT_DIST_DIR": ".next-preview" },
+      "port": 3000,
+      "autoPort": true
+    },
+    {
       "name": "start",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "start"],

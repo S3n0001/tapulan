@@ -38,7 +38,8 @@ export async function GET(
   }
 
   const name = path.basename(decodeURIComponent(rawName));
-  const filePath = path.join(process.cwd(), "data", "uploads", id, name);
+  const dataDir = process.env.DATA_DIR || path.join(process.cwd(), "data");
+  const filePath = path.join(dataDir, "uploads", id, name);
 
   let data: Buffer;
   try {
@@ -54,7 +55,9 @@ export async function GET(
       "Content-Type": TYPES[ext] ?? "application/octet-stream",
       "Content-Length": String(data.byteLength),
       "Content-Disposition": `${disposition}; filename*=UTF-8''${encodeURIComponent(name)}`,
-      "Cache-Control": "private, max-age=3600",
+      // content-addressed ids never change — cache hard so a metered phone
+      // doesn't re-download the same PDF every hour
+      "Cache-Control": "private, max-age=31536000, immutable",
       "X-Content-Type-Options": "nosniff",
     },
   });

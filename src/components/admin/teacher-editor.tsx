@@ -70,6 +70,7 @@ export function TeacherEditor({
     <Panel
       open={open}
       onClose={onClose}
+      onCmdEnter={submit}
       title={teacher ? `Edit ${teacher.name}` : "New teacher"}
       description={teacher ? "Update the name or note" : "Add a teacher to assign to subjects"}
       footer={

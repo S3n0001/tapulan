@@ -1,4 +1,11 @@
-import { BookOpen, CalendarDays, Clock3, ListTodo, type LucideIcon } from "lucide-react";
+import {
+  BookOpen,
+  CalendarDays,
+  CalendarRange,
+  Clock3,
+  ListTodo,
+  type LucideIcon,
+} from "lucide-react";
 
 export interface NavEntry {
   href: string;
@@ -11,8 +18,9 @@ export interface NavEntry {
 export const NAV: NavEntry[] = [
   { href: "/", label: "Today", icon: Clock3, shortcut: "1" },
   { href: "/week", label: "Week", icon: CalendarDays, shortcut: "2" },
-  { href: "/tasks", label: "Tasks", icon: ListTodo, shortcut: "3" },
-  { href: "/classes", label: "Classes", icon: BookOpen, shortcut: "4" },
+  { href: "/calendar", label: "Calendar", icon: CalendarRange, shortcut: "3" },
+  { href: "/tasks", label: "Tasks", icon: ListTodo, shortcut: "4" },
+  { href: "/classes", label: "Classes", icon: BookOpen, shortcut: "5" },
 ];
 
 export function isNavActive(href: string, pathname: string): boolean {

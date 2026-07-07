@@ -25,6 +25,21 @@ function safeName(raw: string): string {
 }
 
 export async function POST(request: Request): Promise<NextResponse> {
+  // CSRF defense: a cross-site page can auto-submit a multipart form under the
+  // admin's cookie, so reject when the browser-set Origin isn't our own host
+  const origin = request.headers.get("origin");
+  if (origin) {
+    let originHost: string | null = null;
+    try {
+      originHost = new URL(origin).host;
+    } catch {
+      originHost = null;
+    }
+    if (originHost !== request.headers.get("host")) {
+      return NextResponse.json({ error: "Cross-site upload blocked." }, { status: 403 });
+    }
+  }
+
   if (!(await isAdmin())) {
     return NextResponse.json({ error: "Not signed in as admin." }, { status: 401 });
   }
@@ -46,7 +61,8 @@ export async function POST(request: Request): Promise<NextResponse> {
 
   const id = randomBytes(8).toString("hex");
   const name = safeName(file.name);
-  const dir = path.join(process.cwd(), "data", "uploads", id);
+  const dataDir = process.env.DATA_DIR || path.join(process.cwd(), "data");
+  const dir = path.join(dataDir, "uploads", id);
   await fs.mkdir(dir, { recursive: true });
   await fs.writeFile(path.join(dir, name), Buffer.from(await file.arrayBuffer()));
 

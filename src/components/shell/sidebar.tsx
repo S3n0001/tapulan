@@ -1,8 +1,9 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Lock, Search } from "lucide-react";
+import { Lock, PanelLeftClose, PanelLeftOpen, Search } from "lucide-react";
 import type { Settings, Strand, StrandCode } from "@/lib/domain/types";
 import { cn } from "@/lib/utils";
 import { Kbd } from "@/components/ui/kbd";
@@ -12,37 +13,131 @@ import { StrandSwitcher } from "./strand-switcher";
 import { ThemeToggle } from "./theme-toggle";
 import { openPalette } from "./command-palette";
 
+/** Cookie so the server renders the right width — no expand/collapse flash. */
+const COLLAPSE_COOKIE = "tapulan.sidebar";
+
 export function Sidebar({
   strands,
   current,
   settings,
   openCount,
+  defaultCollapsed = false,
 }: {
   strands: Strand[];
   current: StrandCode | null;
   settings: Settings;
   openCount: number;
+  defaultCollapsed?: boolean;
 }) {
   const pathname = usePathname();
   const isAdmin = useIsAdmin();
+  const [collapsed, setCollapsed] = useState(defaultCollapsed);
 
+  const toggle = () =>
+    setCollapsed((c) => {
+      const next = !c;
+      document.cookie = `${COLLAPSE_COOKIE}=${next ? "1" : "0"}; path=/; max-age=31536000; samesite=lax`;
+      return next;
+    });
+
+  // ⌘B / Ctrl+B, the sidebar shortcut every editor trained us on
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === "b") {
+        e.preventDefault();
+        toggle();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  // Both states share one geometry: every row keeps its height and padding,
+  // icons sit in a fixed 28px-center column, and only the aside width
+  // animates — labels fade out instead of reflowing.
   return (
-    <aside className="hidden w-[220px] shrink-0 flex-col gap-0.5 px-3 pb-3 pt-2.5 lg:flex">
-      <StrandSwitcher
-        strands={strands}
-        current={current}
-        sectionLabel={[settings.sectionName, settings.schoolYear].filter(Boolean).join(" · ")}
-        variant="sidebar"
-      />
+    <aside
+      className={cn(
+        "hidden shrink-0 flex-col gap-0.5 px-2.5 pb-3 pt-2.5 transition-[width] duration-[var(--dur-2)] lg:flex",
+        collapsed ? "w-[56px]" : "w-[220px]"
+      )}
+    >
+      <div className="flex h-10 shrink-0 items-center gap-1">
+        <button
+          type="button"
+          onClick={toggle}
+          title={`${collapsed ? "Expand" : "Collapse"} sidebar (⌘B)`}
+          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          aria-expanded={!collapsed}
+          className="tap inline-flex size-9 shrink-0 items-center justify-center rounded-full text-muted transition-[color,background-color,transform] duration-[var(--dur-1)] hover:bg-surface-2 hover:text-ink"
+        >
+          {collapsed ? (
+            <PanelLeftOpen className="size-[18px]" strokeWidth={1.75} />
+          ) : (
+            <PanelLeftClose className="size-[18px]" strokeWidth={1.75} />
+          )}
+        </button>
+
+        <div
+          inert={collapsed}
+          className={cn(
+            "min-w-0 max-w-[140px] flex-1 transition-opacity duration-[var(--dur-2)]",
+            collapsed && "opacity-0"
+          )}
+        >
+          <StrandSwitcher
+            strands={strands}
+            current={current}
+            sectionLabel={[settings.sectionName, settings.schoolYear].filter(Boolean).join(" · ")}
+            variant="sidebar"
+          />
+        </div>
+      </div>
+
+      {/* Rail-mode strand badge: the slot animates open in sync with the width,
+          so the rows below slide rather than jump. */}
+      <div
+        inert={!collapsed}
+        className={cn(
+          "flex shrink-0 justify-center transition-[height,opacity,margin] duration-[var(--dur-2)]",
+          collapsed ? "mt-1 h-9" : "h-0 overflow-hidden opacity-0"
+        )}
+      >
+        <StrandSwitcher strands={strands} current={current} variant="sidebar" collapsed />
+      </div>
 
       <button
         type="button"
         onClick={openPalette}
-        className="tap mt-2 flex h-8 items-center gap-2 rounded-[var(--r-control)] border border-line bg-surface px-2.5 text-[12.5px] text-faint transition-[color,background-color,border-color,transform] duration-[var(--dur-1)] hover:border-line-strong hover:text-muted"
+        title={collapsed ? "Search (⌘K)" : undefined}
+        aria-label="Search"
+        className={cn(
+          "tap mt-2 flex h-8 shrink-0 items-center gap-2 overflow-hidden whitespace-nowrap rounded-[var(--r-control)] border px-[9px] text-[12.5px] text-faint transition-[color,background-color,border-color,transform] duration-[var(--dur-2)]",
+          collapsed
+            ? "border-transparent hover:bg-surface-2 hover:text-muted"
+            : "border-line bg-surface hover:border-line-strong hover:text-muted"
+        )}
       >
-        <Search className="size-3.5" />
-        <span className="flex-1 text-left">Search…</span>
-        <Kbd>⌘K</Kbd>
+        <Search className="size-4 shrink-0" />
+        <span
+          className={cn(
+            "flex-1 text-left transition-opacity duration-[var(--dur-2)]",
+            collapsed && "opacity-0"
+          )}
+        >
+          Search…
+        </span>
+        <span
+          className={cn(
+            "flex items-center gap-0.5 transition-opacity duration-[var(--dur-2)]",
+            collapsed && "opacity-0"
+          )}
+        >
+          <Kbd>
+            <span className="text-[9.5px] leading-none">⌘</span>
+          </Kbd>
+          <Kbd>K</Kbd>
+        </span>
       </button>
 
       <nav aria-label="Views" className="mt-3 flex flex-col gap-[3px]">
@@ -53,42 +148,86 @@ export function Sidebar({
               key={item.href}
               href={item.href}
               aria-current={active ? "page" : undefined}
+              title={collapsed ? item.label : undefined}
               className={cn(
-                "tap flex h-[30px] items-center gap-2.5 rounded-[6px] px-2 text-[13px] font-medium transition-[color,background-color,transform] duration-[var(--dur-1)]",
+                "tap relative flex h-[30px] items-center gap-2.5 overflow-hidden whitespace-nowrap rounded-[6px] px-2.5 text-[13px] font-medium transition-[color,background-color,transform] duration-[var(--dur-1)]",
                 active ? "bg-surface-2 text-ink" : "text-muted hover:bg-surface hover:text-ink"
               )}
             >
-              <item.icon className="size-4" strokeWidth={1.75} />
-              <span className="flex-1">{item.label}</span>
+              <item.icon className="size-4 shrink-0" strokeWidth={1.75} />
+              <span
+                className={cn(
+                  "flex-1 transition-opacity duration-[var(--dur-2)]",
+                  collapsed && "opacity-0"
+                )}
+              >
+                {item.label}
+              </span>
               {item.href === "/tasks" && openCount > 0 && (
-                <span className="tnum font-mono text-[11px] text-faint">{openCount}</span>
+                <>
+                  <span
+                    className={cn(
+                      "tnum font-mono text-[11px] text-faint transition-opacity duration-[var(--dur-2)]",
+                      collapsed && "opacity-0"
+                    )}
+                  >
+                    {openCount}
+                  </span>
+                  <span
+                    aria-hidden
+                    className={cn(
+                      "absolute right-1 top-1 size-1.5 rounded-full bg-brand transition-opacity duration-[var(--dur-2)]",
+                      !collapsed && "opacity-0"
+                    )}
+                  />
+                </>
               )}
             </Link>
           );
         })}
       </nav>
 
-      <div className="mt-auto flex items-center gap-1 pt-3">
+      <div className="mt-auto flex flex-col gap-1 pt-3">
         {/* admin stays invisible to students — signed-in beadles get the shortcut */}
-        {isAdmin ? (
+        {isAdmin && (
           <Link
             href="/admin"
             aria-current={pathname.startsWith("/admin") ? "page" : undefined}
+            title={collapsed ? "Admin" : undefined}
             className={cn(
-              "tap flex h-8 flex-1 items-center gap-2.5 rounded-[6px] px-2 text-[13px] font-medium transition-[color,background-color,transform] duration-[var(--dur-1)]",
+              "tap relative flex h-8 items-center gap-2.5 overflow-hidden whitespace-nowrap rounded-[6px] px-2.5 text-[13px] font-medium transition-[color,background-color,transform] duration-[var(--dur-1)]",
               pathname.startsWith("/admin")
                 ? "bg-surface-2 text-ink"
                 : "text-muted hover:bg-surface hover:text-ink"
             )}
           >
-            <Lock className="size-4" strokeWidth={1.75} />
-            <span className="flex-1">Admin</span>
-            <span className="size-1.5 rounded-full bg-ok" aria-label="Signed in" role="img" />
+            <Lock className="size-4 shrink-0" strokeWidth={1.75} />
+            <span
+              className={cn(
+                "flex-1 transition-opacity duration-[var(--dur-2)]",
+                collapsed && "opacity-0"
+              )}
+            >
+              Admin
+            </span>
+            <span
+              className={cn(
+                "size-1.5 shrink-0 rounded-full bg-ok transition-opacity duration-[var(--dur-2)]",
+                collapsed && "opacity-0"
+              )}
+              aria-label="Signed in"
+              role="img"
+            />
+            <span
+              aria-hidden
+              className={cn(
+                "absolute right-1 top-1 size-1.5 rounded-full bg-ok transition-opacity duration-[var(--dur-2)]",
+                !collapsed && "opacity-0"
+              )}
+            />
           </Link>
-        ) : (
-          <span className="flex-1" />
         )}
-        <ThemeToggle />
+        <ThemeToggle className="!size-9 rounded-full" />
       </div>
     </aside>
   );

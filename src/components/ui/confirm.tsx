@@ -4,6 +4,8 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
+  useId,
   useRef,
   useState,
   type ReactNode,
@@ -38,6 +40,10 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
   const shown = options ?? lastRef.current;
   const { mounted, state } = usePresence(options !== null, 140);
 
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const restoreRef = useRef<HTMLElement | null>(null);
+  const descId = useId();
+
   const confirm = useCallback<Confirm>((opts) => {
     setOptions(opts);
     return new Promise<boolean>((resolve) => {
@@ -51,6 +57,39 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
     setOptions(null);
   }, []);
 
+  // while open: trap Tab inside the dialog, handle Escape even after focus
+  // wanders, and restore focus to the trigger on close
+  useEffect(() => {
+    if (!options) return;
+    restoreRef.current = document.activeElement as HTMLElement | null;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        settle(false);
+        return;
+      }
+      if (e.key !== "Tab" || !dialogRef.current) return;
+      const focusable = dialogRef.current.querySelectorAll<HTMLElement>(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+      );
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      restoreRef.current?.focus?.();
+    };
+  }, [options, settle]);
+
   return (
     <ConfirmContext.Provider value={confirm}>
       {children}
@@ -60,9 +99,7 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
           role="alertdialog"
           aria-modal="true"
           aria-label={shown.title}
-          onKeyDown={(e) => {
-            if (e.key === "Escape") settle(false);
-          }}
+          aria-describedby={shown.description ? descId : undefined}
         >
           <div
             data-state={state}
@@ -71,12 +108,13 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
             aria-hidden
           />
           <div
+            ref={dialogRef}
             data-state={state}
             className="anim-pop relative w-full max-w-[380px] rounded-[var(--r-panel)] border border-line bg-pop p-4 shadow-[var(--shadow-overlay)]"
           >
             <h2 className="text-[14px] font-semibold text-ink">{shown.title}</h2>
             {shown.description && (
-              <p className="mt-1.5 text-[13px] leading-relaxed text-muted">
+              <p id={descId} className="mt-1.5 text-[13px] leading-relaxed text-muted">
                 {shown.description}
               </p>
             )}

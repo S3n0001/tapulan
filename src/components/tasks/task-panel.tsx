@@ -15,7 +15,7 @@ import {
   Trash2,
   XCircle,
 } from "lucide-react";
-import { confirmTask, deleteTask, moveTask, setTaskStatus } from "@/actions/tasks";
+import { cancelTask, confirmTask, deleteTask, moveTask } from "@/actions/tasks";
 import type { TaskFull } from "@/lib/domain/types";
 import { dueLabel, fmtDateLong, fmtDateMed, fmtMinAmPm, isISODate } from "@/lib/domain/time";
 import { accentStyle } from "@/lib/domain/hues";
@@ -64,14 +64,18 @@ export function TaskPanel({
   const [moveDate, setMoveDate] = useState("");
   const [moveTentative, setMoveTentative] = useState(true);
   const [moveNote, setMoveNote] = useState("");
+  const [cancelling, setCancelling] = useState(false);
+  const [cancelReason, setCancelReason] = useState("");
 
-  // reset the move form whenever a different task opens
+  // reset the inline forms whenever a different task opens
   useEffect(() => {
     if (task) {
       setMoving(false);
       setMoveDate(task.dueDate);
       setMoveTentative(true);
       setMoveNote(task.note ?? "");
+      setCancelling(false);
+      setCancelReason("");
     }
   }, [task]);
 
@@ -99,6 +103,16 @@ export function TaskPanel({
         toast.success(moveTentative ? "Moved — marked unconfirmed" : "Date moved");
         setMoving(false);
       } else toast.error(res.error ?? "Couldn't move the task.");
+    });
+  }
+
+  function submitCancel() {
+    start(async () => {
+      const res = await cancelTask(task!.id, cancelReason.trim() || null);
+      if (res.ok) {
+        toast.success("Task cancelled");
+        setCancelling(false);
+      } else toast.error(res.error ?? "Couldn't cancel the task.");
     });
   }
 
@@ -161,7 +175,7 @@ export function TaskPanel({
           <Property label="Due">
             <span className="font-medium">{fmtDateLong(task.dueDate)}</span>
             <span className="tnum ml-auto shrink-0 font-mono text-[12px] text-muted">
-              {dueLabel(task.dueDate, now)}
+              {dueLabel(task.dueDate, now, task.dueTime)}
             </span>
           </Property>
           <Property label="Time">
@@ -178,6 +192,24 @@ export function TaskPanel({
             <Status status={task.status} />
           </Property>
         </dl>
+
+        {/* cancellation — the dominant state, with an optional reason */}
+        {task.status === "cancelled" && (
+          <div className="flex gap-2.5 rounded-[var(--r-card)] border border-line bg-surface/60 px-3 py-2.5">
+            <XCircle className="mt-0.5 size-4 shrink-0 text-faint" />
+            <div className="min-w-0 space-y-0.5">
+              <p className="text-[12.5px] font-semibold text-muted">Cancelled</p>
+              <p
+                className={cn(
+                  "text-[13px] leading-relaxed",
+                  task.cancelReason ? "text-ink/90" : "text-faint"
+                )}
+              >
+                {task.cancelReason ?? "No reason given."}
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* moved history — honest dates, never silent edits */}
         {task.movedFrom && (
@@ -292,6 +324,28 @@ export function TaskPanel({
                   </Button>
                 </div>
               </div>
+            ) : cancelling ? (
+              <div className="anim-fade space-y-3">
+                <Field label="Reason" hint="optional" htmlFor="cancel-reason">
+                  <Textarea
+                    id="cancel-reason"
+                    rows={2}
+                    value={cancelReason}
+                    placeholder="e.g. Folded into next week's unit test."
+                    onChange={(e) => setCancelReason(e.target.value)}
+                    data-autofocus
+                  />
+                </Field>
+                <div className="flex justify-end gap-2">
+                  <Button size="sm" variant="ghost" onClick={() => setCancelling(false)}>
+                    Keep it
+                  </Button>
+                  <Button size="sm" variant="danger" loading={pending} onClick={submitCancel}>
+                    <XCircle className="size-3.5" />
+                    Cancel task
+                  </Button>
+                </div>
+              </div>
             ) : (
               <div className="flex flex-wrap gap-1.5">
                 <Button size="sm" variant="secondary" onClick={() => setMoving(true)}>
@@ -314,7 +368,7 @@ export function TaskPanel({
                     size="sm"
                     variant="secondary"
                     loading={pending}
-                    onClick={() => act(() => setTaskStatus(task.id, "cancelled"), "Task cancelled")}
+                    onClick={() => setCancelling(true)}
                   >
                     <XCircle className="size-3.5" />
                     Cancel task

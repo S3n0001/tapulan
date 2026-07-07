@@ -16,10 +16,11 @@ import { Layers, Lock, Search, SunMoon } from "lucide-react";
 import { setStrand } from "@/actions/session";
 import type { Strand, StrandCode } from "@/lib/domain/types";
 import { accentStyle } from "@/lib/domain/hues";
-import { fmtDateShort } from "@/lib/domain/time";
+import { fmtDateShort, toISODate } from "@/lib/domain/time";
 import { cn } from "@/lib/utils";
 import { usePresence } from "@/hooks/use-presence";
 import { Kbd } from "@/components/ui/kbd";
+import { useClassDetail } from "@/components/classes/class-detail";
 import { useIsAdmin } from "./admin-context";
 import { NAV } from "./nav";
 
@@ -73,6 +74,7 @@ export function CommandPalette({
 }) {
   const router = useRouter();
   const { setTheme } = useTheme();
+  const { openClass } = useClassDetail();
   const isAdmin = useIsAdmin();
   const [, startStrand] = useTransition();
   const [open, setOpen] = useState(false);
@@ -84,7 +86,7 @@ export function CommandPalette({
 
   const close = useCallback(() => setOpen(false), []);
 
-  // global keys: ⌘K / ctrl+K / "/" to open, 1–4 to jump views
+  // global keys: ⌘K / ctrl+K / "/" to open, 1–5 to jump views
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       const key = e.key;
@@ -102,7 +104,10 @@ export function CommandPalette({
         return;
       }
       const nav = NAV.find((n) => n.shortcut === key);
-      if (nav && !open) router.push(nav.href);
+      if (nav && !open) {
+        e.preventDefault();
+        router.push(nav.href);
+      }
     }
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
@@ -115,13 +120,19 @@ export function CommandPalette({
     return () => window.removeEventListener(OPEN_EVENT, onOpen);
   }, []);
 
-  // reset + focus per open
+  // reset + focus per open; lock background scroll and restore focus on close
   useEffect(() => {
-    if (open) {
-      setQuery("");
-      setActive(0);
-      requestAnimationFrame(() => inputRef.current?.focus());
-    }
+    if (!open) return;
+    const restore = document.activeElement as HTMLElement | null;
+    setQuery("");
+    setActive(0);
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    requestAnimationFrame(() => inputRef.current?.focus());
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      restore?.focus?.();
+    };
   }, [open]);
 
   const entries = useMemo<Entry[]>(() => {
@@ -184,6 +195,26 @@ export function CommandPalette({
       });
     }
 
+    // empty palette peeks at what's due soon; a query switches to full search
+    if (!query.trim()) {
+      const todayISO = toISODate(new Date());
+      const soon = tasks
+        .filter((t) => t.due >= todayISO)
+        .sort((a, b) => a.due.localeCompare(b.due))
+        .slice(0, 6);
+      for (const t of soon) {
+        list.push({
+          id: `soon-${t.id}`,
+          section: "Due soon",
+          label: t.title,
+          hint: t.subject,
+          icon: <span className="font-mono text-[10px] font-semibold text-faint">{t.type}</span>,
+          right: <span className="tnum font-mono text-[11px] text-faint">{fmtDateShort(t.due)}</span>,
+          run: () => router.push(`/tasks?task=${t.id}`),
+        });
+      }
+    }
+
     const taskHits = tasks
       .filter((t) => query.trim() && matches(query, `${t.title} ${t.subject} ${t.type}`))
       .slice(0, 8);
@@ -209,12 +240,12 @@ export function CommandPalette({
         label: s.name,
         hint: s.short,
         icon: <span className="font-mono text-[10px] font-semibold text-faint">{s.short}</span>,
-        run: () => router.push(`/classes?c=${s.id}`),
+        run: () => openClass(s.id),
       });
     }
 
     return list;
-  }, [query, strands, current, tasks, subjects, router, setTheme, startStrand, isAdmin]);
+  }, [query, strands, current, tasks, subjects, router, setTheme, startStrand, isAdmin, openClass]);
 
   const clampedActive = Math.min(active, Math.max(0, entries.length - 1));
 
@@ -235,7 +266,19 @@ export function CommandPalette({
   let lastSection: string | null = null;
 
   return createPortal(
-    <div className="fixed inset-0 z-50" role="dialog" aria-modal="true" aria-label="Command palette">
+    <div
+      className="fixed inset-0 z-50"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Command palette"
+      onKeyDown={(e) => {
+        // trap focus — Tab never escapes to the shell behind the overlay
+        if (e.key === "Tab") {
+          e.preventDefault();
+          inputRef.current?.focus();
+        }
+      }}
+    >
       <div
         data-state={state}
         className="anim-fade absolute inset-0 bg-[oklch(0.08_0.005_265/0.52)]"

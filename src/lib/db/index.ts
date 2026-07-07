@@ -17,13 +17,28 @@ function hashPassword(password: string): string {
   return `${salt}:${hash}`;
 }
 
+/**
+ * Idempotent column adds for databases created before a feature landed.
+ * `CREATE TABLE IF NOT EXISTS` never alters an existing table, so upgrades
+ * that add a column have to backfill it here.
+ */
+function migrate(db: Database): void {
+  const cols = db.prepare("PRAGMA table_info(tasks)").all() as { name: string }[];
+  if (!cols.some((c) => c.name === "cancel_reason")) {
+    db.exec("ALTER TABLE tasks ADD COLUMN cancel_reason TEXT");
+  }
+}
+
 function open(): Database {
-  const dir = path.join(process.cwd(), "data");
+  // DATA_DIR lets a host mount a persistent volume for the DB + uploads;
+  // defaults to ./data next to the app for local dev.
+  const dir = process.env.DATA_DIR || path.join(process.cwd(), "data");
   fs.mkdirSync(dir, { recursive: true });
   const db = new DatabaseConstructor(path.join(dir, "tapulan.db"));
   db.pragma("journal_mode = WAL");
   db.pragma("foreign_keys = ON");
   db.exec(SCHEMA);
+  migrate(db);
 
   const seeded = db.prepare("SELECT COUNT(*) AS n FROM strands").get() as { n: number };
   if (seeded.n === 0) {

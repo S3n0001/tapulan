@@ -5,7 +5,7 @@ import type { TaskFull } from "@/lib/domain/types";
 import { dueLabel, dueTone, type DueTone } from "@/lib/domain/time";
 import { accentStyle } from "@/lib/domain/hues";
 import { cn } from "@/lib/utils";
-import { HueBadge, WarnFlag } from "@/components/ui/badge";
+import { HueBadge, MutedFlag, WarnFlag } from "@/components/ui/badge";
 import { DoneCheck } from "./done-check";
 
 const TONE_TEXT: Record<DueTone, string> = {
@@ -38,12 +38,12 @@ export function TaskListRow({
 }) {
   const cancelled = task.status === "cancelled";
   const complete = done || task.status === "done";
-  const tone: DueTone = complete || cancelled ? "normal" : dueTone(task.dueDate, now);
+  const tone: DueTone = complete || cancelled ? "normal" : dueTone(task.dueDate, now, task.dueTime);
 
   return (
     <div
       className={cn(
-        "group relative flex items-center gap-3 px-3.5 py-2 transition-colors duration-[var(--dur-1)] lg:h-9 lg:px-4 lg:py-0",
+        "group relative flex items-start gap-3 px-3.5 py-2 transition-colors duration-[var(--dur-1)] lg:h-9 lg:items-center lg:px-4 lg:py-0",
         selected ? "bg-surface-2" : "hover:bg-surface/70"
       )}
     >
@@ -77,8 +77,16 @@ export function TaskListRow({
           {task.links.length > 0 && (
             <Paperclip className="size-3 shrink-0 text-faint" aria-label="Has materials" />
           )}
-          {task.movedFrom && <WarnFlag>moved</WarnFlag>}
-          {task.status === "tentative" && <WarnFlag>unconfirmed</WarnFlag>}
+          {cancelled ? (
+            <span title={task.cancelReason ?? undefined}>
+              <MutedFlag>cancelled</MutedFlag>
+            </span>
+          ) : (
+            <>
+              {task.movedFrom && <WarnFlag>moved</WarnFlag>}
+              {task.status === "tentative" && <WarnFlag>unconfirmed</WarnFlag>}
+            </>
+          )}
         </span>
 
         <span className="flex w-full items-center gap-3 pl-[56px] lg:w-auto lg:pl-0">
@@ -98,11 +106,11 @@ export function TaskListRow({
           </span>
           <span
             className={cn(
-              "tnum w-[86px] whitespace-nowrap text-right font-mono text-[12px] font-medium",
+              "tnum ml-auto w-[86px] whitespace-nowrap text-right font-mono text-[12px] font-medium lg:ml-0",
               TONE_TEXT[tone]
             )}
           >
-            {cancelled ? "—" : dueLabel(task.dueDate, now)}
+            {cancelled ? "—" : dueLabel(task.dueDate, now, task.dueTime)}
           </span>
         </span>
       </button>

@@ -319,21 +319,6 @@
 
 /* ========================================================= motion */
 
-@keyframes pulse-ring {
-  0% {
-    box-shadow: 0 0 0 0 color-mix(in oklab, var(--ok) 55%, transparent);
-  }
-  70% {
-    box-shadow: 0 0 0 6px color-mix(in oklab, var(--ok) 0%, transparent);
-  }
-  100% {
-    box-shadow: 0 0 0 0 color-mix(in oklab, var(--ok) 0%, transparent);
-  }
-}
-.live-dot {
-  animation: pulse-ring 2.4s ease-in-out infinite;
-}
-
 @keyframes fade-in {
   from {
     opacity: 0;
@@ -474,6 +459,48 @@
   animation: view-in var(--dur-2) var(--ease-out);
 }
 
+/* ---- skeleton loading ----
+   A quiet opacity pulse on a hairline tint — no gradient sweep. Skeletons
+   mirror each view's real geometry so the content swap is a no-shift replace. */
+@keyframes skeleton-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+.skeleton {
+  background-color: color-mix(in oklab, var(--ink) 7%, transparent);
+  border-radius: 4px;
+  animation: skeleton-pulse 1.7s var(--ease-standard) infinite;
+}
+
+/* ---- sliding-underline entrance (admin tabs, day tabs) ---- */
+@keyframes underline-in {
+  from {
+    opacity: 0;
+    transform: scaleX(0.5);
+  }
+}
+.anim-underline {
+  transform-origin: center;
+  animation: underline-in var(--dur-1) var(--ease);
+}
+
+/* ---- marquee: long labels that scroll instead of truncating in tight rails.
+   Two identical copies; -50% lands one copy over, so the loop is seamless.
+   Paused at rest, slides on hover of the enclosing `group`. ---- */
+@keyframes marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -481,9 +508,6 @@
     animation-duration: 0.001ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important;
-  }
-  .live-dot {
-    animation: none;
   }
   .press:active,
   .tap:active,

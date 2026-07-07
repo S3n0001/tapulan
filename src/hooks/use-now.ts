@@ -11,15 +11,23 @@ export function useNow(initialISO: string, intervalMs = 30_000): Date {
   const [now, setNow] = useState(() => new Date(initialISO));
 
   useEffect(() => {
+    let intervalId: number | undefined;
     const tick = () => setNow(new Date());
     tick(); // correct to real client time immediately after hydration
-    const id = window.setInterval(tick, intervalMs);
+    // align the first tick to the next wall-clock boundary so the minute
+    // flips *with* the clock, not up to a full interval late
+    const delay = intervalMs - (Date.now() % intervalMs);
+    const timeoutId = window.setTimeout(() => {
+      tick();
+      intervalId = window.setInterval(tick, intervalMs);
+    }, delay);
     const onVisible = () => {
       if (!document.hidden) tick();
     };
     document.addEventListener("visibilitychange", onVisible);
     return () => {
-      window.clearInterval(id);
+      window.clearTimeout(timeoutId);
+      if (intervalId) window.clearInterval(intervalId);
       document.removeEventListener("visibilitychange", onVisible);
     };
   }, [intervalMs]);

@@ -53,11 +53,16 @@ function ToastItem({ toast }: { toast: Toast }) {
 
   return (
     <div
+      // errors interrupt (assertive); success/info wait their turn (polite)
+      role={toast.kind === "error" ? "alert" : "status"}
+      aria-live={toast.kind === "error" ? "assertive" : "polite"}
       data-state={leaving ? "closed" : "open"}
-      className="anim-toast pointer-events-auto flex h-9 max-w-[min(92vw,26rem)] items-center gap-2 rounded-[var(--r-card)] border border-line bg-pop px-3 shadow-[var(--shadow-pop)]"
+      className="anim-toast pointer-events-auto flex min-h-9 max-w-[min(92vw,26rem)] items-center gap-2 rounded-[var(--r-card)] border border-line bg-pop px-3 py-1.5 shadow-[var(--shadow-pop)]"
     >
-      {ICONS[toast.kind]}
-      <p className="truncate text-[13px] font-medium text-ink">{toast.message}</p>
+      <span className="shrink-0">{ICONS[toast.kind]}</span>
+      <p title={toast.message} className="line-clamp-3 text-[13px] font-medium text-ink">
+        {toast.message}
+      </p>
     </div>
   );
 }
@@ -86,9 +91,9 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <ToastContext.Provider value={api}>
       {children}
+      {/* positioning only — each toast is its own live region (assertive for
+          errors) so a screen reader hears them at the right urgency */}
       <div
-        aria-live="polite"
-        aria-atomic="false"
         className={cn(
           "pointer-events-none fixed z-[70] flex flex-col items-center gap-2",
           "inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+4.25rem)]",

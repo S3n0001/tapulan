@@ -28,7 +28,7 @@ Precise, calm, quietly funny. "Tapulan" is Bisaya for *lazy* — the joke is the
 2. **Color is meaning.** Every hue is bound to a subject or a task type and comes from the database. Neutral surfaces everywhere else; the accent budget is spent on data, not decoration.
 3. **Truth over tidiness.** Moved and unconfirmed dates are first-class states with visible history ("Jul 10 → Jul 14 · unconfirmed"), never silent edits.
 4. **One thumb.** Primary navigation sits at the bottom on mobile; every control is reachable and ≥44px. Desktop gets density, not a different product.
-5. **The tool disappears.** Familiar product vocabulary (Linear-grade restraint) and skeleton-free instant loads. Motion is fast, purposeful micro-interaction (press, hover, enter/exit ≤240ms) that never makes a hurrying student wait — and always yields to `prefers-reduced-motion`.
+5. **The tool disappears.** Familiar product vocabulary (Linear-grade restraint) and instant loads — when the network does make us wait, geometry-true skeletons hold the layout so nothing shifts. Motion is fast, purposeful micro-interaction (press, hover, enter/exit ≤240ms) that never makes a hurrying student wait — and always yields to `prefers-reduced-motion`.
 6. **The admin door is invisible.** Students never see an Admin entry — it surfaces only for a signed-in admin, or when someone deliberately types it into search (or visits /admin). Editing power is real but never advertised.
 
 ## Accessibility & Inclusion

@@ -65,3 +65,12 @@ export function WarnFlag({ children }: { children: ReactNode }) {
     </span>
   );
 }
+
+/** Muted marker for terminal states like cancelled — neutral, never alarming. */
+export function MutedFlag({ children }: { children: ReactNode }) {
+  return (
+    <span className="inline-flex h-[17px] shrink-0 items-center rounded-[4px] bg-surface-2 px-1 font-mono text-[10px] font-semibold uppercase tracking-[0.03em] text-faint">
+      {children}
+    </span>
+  );
+}

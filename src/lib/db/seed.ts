@@ -121,6 +121,8 @@ const PERIODS: PeriodSpec[] = [
   p(1, "2:55", "3:15", { kind: "fixture", label: "Cleaning" }),
 
   // ------------------------------------------------------------ Tuesday
+  p(2, "7:00", "7:30", { kind: "fixture", label: "Morning Assembly" }),
+  p(2, "7:30", "7:45", { kind: "fixture", label: "Homeroom" }),
   p(2, "7:45", "9:15", { kind: "class", subject: "cpar" }),
   p(2, "9:15", "9:35", { kind: "break", label: "Recess" }),
   p(2, "9:35", "11:05", { kind: "class", subject: "fil" }),
@@ -131,6 +133,8 @@ const PERIODS: PeriodSpec[] = [
   p(2, "2:55", "3:15", { kind: "fixture", label: "Cleaning" }),
 
   // ---------------------------------------------------------- Wednesday
+  p(3, "7:00", "7:30", { kind: "fixture", label: "Morning Assembly" }),
+  p(3, "7:30", "7:45", { kind: "fixture", label: "Homeroom" }),
   p(3, "7:45", "9:15", { kind: "class", subject: "mil" }),
   p(3, "9:15", "9:35", { kind: "break", label: "Recess" }),
   p(3, "9:35", "11:05", { kind: "class", subject: "perdev" }),
@@ -142,6 +146,8 @@ const PERIODS: PeriodSpec[] = [
   p(3, "3:40", "4:00", { kind: "fixture", label: "Cleaning" }),
 
   // ----------------------------------------------------------- Thursday
+  p(4, "7:00", "7:30", { kind: "fixture", label: "Morning Assembly" }),
+  p(4, "7:30", "7:45", { kind: "fixture", label: "Homeroom" }),
   p(4, "7:45", "9:15", { kind: "class", subject: "cpar" }),
   p(4, "9:15", "9:35", { kind: "break", label: "Recess" }),
   p(4, "9:35", "11:05", { kind: "class", subject: "eapp" }),
@@ -153,6 +159,8 @@ const PERIODS: PeriodSpec[] = [
   p(4, "3:40", "4:00", { kind: "fixture", label: "Cleaning" }),
 
   // ------------------------------------------------------------- Friday
+  p(5, "7:00", "7:30", { kind: "fixture", label: "Morning Assembly" }),
+  p(5, "7:30", "7:45", { kind: "fixture", label: "Homeroom" }),
   p(5, "7:45", "8:30", { kind: "fixture", label: "Song Practice" }),
   p(5, "8:30", "9:15", { kind: "fixture", label: "Guidance" }),
   p(5, "9:15", "9:35", { kind: "break", label: "Recess" }),
@@ -165,7 +173,19 @@ const PERIODS: PeriodSpec[] = [
   p(5, "1:00", "1:10", { kind: "break", label: "Afternoon Break" }),
   p(5, "1:10", "1:45", { kind: "class", subject: "pr2" }),
   p(5, "1:45", "2:10", { kind: "fixture", label: "Adviser's Period / Cleaning" }),
-  p(5, "2:10", "4:00", { kind: "fixture", label: "SSG" }),
+  p(5, "2:10", "4:00", { kind: "fixture", label: "SYG" }),
+];
+
+/**
+ * Calendar overrides announced for the section. Dates are absolute, the same
+ * way TASKS are — admins own them from here in Admin → Schedule → Calendar.
+ */
+const DAY_MARKS: { date: string; kind: "async" | "no_class"; label?: string; note?: string }[] = [
+  {
+    date: "2026-07-08", // Wednesday of the seed week
+    kind: "async",
+    note: "No in-person class — work through the day's subjects on your own.",
+  },
 ];
 
 const TASK_TYPES = [
@@ -191,6 +211,8 @@ interface TaskSpec {
   status?: "confirmed" | "tentative" | "done" | "cancelled";
   /** original YYYY-MM-DD when the date was moved (renders the moved badge) */
   movedFrom?: string;
+  /** why it was called off — shown when status is "cancelled" */
+  cancelReason?: string;
   note?: string;
   points?: number;
   /** materials — links and shared folders */
@@ -200,12 +222,16 @@ interface TaskSpec {
 /** The section's real requirements, as announced. Admins own them from here. */
 const TASKS: TaskSpec[] = [
   {
+    // Cancelled — kept on record (struck through) with an optional reason, so
+    // the section sees it was called off rather than silently vanishing.
     subject: "eapp",
     type: "UT",
     title: "Mastery test",
     details: "",
     due: "2026-07-07",
     time: t("1:25"),
+    status: "cancelled",
+    cancelReason: "Called off by the teacher — it won't push through.",
     links: [
       {
         label: "Learning materials",
@@ -226,7 +252,9 @@ const TASKS: TaskSpec[] = [
     type: "UT",
     title: "UT 1.1",
     details: "Covers: Accurate measurement.",
-    due: "2026-07-07",
+    due: "2026-07-08",
+    status: "cancelled",
+    cancelReason: "This Unit Test won't push through.",
   },
 ];
 
@@ -241,12 +269,15 @@ export function seedDatabase(db: Database, now: Date = new Date()): void {
   const insertPeriod = db.prepare(
     "INSERT INTO periods (day, start_min, end_min, kind, label, subject_id, teacher_id, strand) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
   );
+  const insertDayMark = db.prepare(
+    "INSERT INTO day_marks (date, kind, label, note) VALUES (?, ?, ?, ?)"
+  );
   const insertType = db.prepare(
     "INSERT INTO task_types (name, short, hue, sort) VALUES (?, ?, ?, ?)"
   );
   const insertTask = db.prepare(
-    `INSERT INTO tasks (title, details, subject_id, type_id, due_date, due_time, status, moved_from, note, points, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO tasks (title, details, subject_id, type_id, due_date, due_time, status, moved_from, cancel_reason, note, points, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   );
   const insertLink = db.prepare(
     "INSERT INTO task_links (task_id, label, url, kind, sort) VALUES (?, ?, ?, 'link', ?)"
@@ -281,6 +312,10 @@ export function seedDatabase(db: Database, now: Date = new Date()): void {
       );
     }
 
+    for (const m of DAY_MARKS) {
+      insertDayMark.run(m.date, m.kind, m.label ?? null, m.note ?? null);
+    }
+
     const typeIds = new Map<string, number>();
     for (const tt of TASK_TYPES) {
       typeIds.set(tt.short, Number(insertType.run(tt.name, tt.short, tt.hue, tt.sort).lastInsertRowid));
@@ -297,6 +332,7 @@ export function seedDatabase(db: Database, now: Date = new Date()): void {
         task.time ?? null,
         task.status ?? "confirmed",
         task.movedFrom ?? null,
+        task.cancelReason ?? null,
         task.note ?? null,
         task.points ?? null,
         created,

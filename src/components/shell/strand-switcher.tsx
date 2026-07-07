@@ -4,8 +4,6 @@ import { useTransition } from "react";
 import { ChevronsUpDown, ChevronDown, Layers } from "lucide-react";
 import { setStrand } from "@/actions/session";
 import type { Strand, StrandCode } from "@/lib/domain/types";
-import { accentStyle } from "@/lib/domain/hues";
-import { cn } from "@/lib/utils";
 import { Menu, MenuItem, MenuLabel, MenuSeparator } from "@/components/ui/menu";
 import { Spinner } from "@/components/ui/spinner";
 
@@ -19,12 +17,15 @@ export function StrandSwitcher({
   current,
   sectionLabel,
   variant,
+  collapsed = false,
 }: {
   strands: Strand[];
   current: StrandCode | null;
   /** e.g. "Grade 12 · SY 2026–2027" — quiet identity, not branding */
   sectionLabel?: string;
   variant: "sidebar" | "chip";
+  /** sidebar rail mode: just the strand badge, menu intact */
+  collapsed?: boolean;
 }) {
   const [pending, start] = useTransition();
   const active = strands.find((s) => s.code === current) ?? null;
@@ -42,7 +43,6 @@ export function StrandSwitcher({
             close();
             pick(s.code);
           }}
-          icon={<span style={accentStyle(s.hue)} className="a-dot size-2 rounded-full" />}
         >
           <span className="font-mono text-[12px] font-semibold">{s.code}</span>
           <span className="ml-1.5 text-[12px] font-normal text-muted">{s.name}</span>
@@ -55,7 +55,6 @@ export function StrandSwitcher({
           close();
           pick("");
         }}
-        icon={<Layers className="size-3.5" />}
       >
         Whole section
         <span className="ml-1.5 text-[12px] font-normal text-muted">all strands</span>
@@ -72,11 +71,9 @@ export function StrandSwitcher({
         >
           {pending ? (
             <Spinner className="size-3 text-muted" />
-          ) : active ? (
-            <span style={accentStyle(active.hue)} className="a-dot size-1.5 rounded-full" />
-          ) : (
+          ) : !active ? (
             <Layers className="size-3 text-muted" />
-          )}
+          ) : null}
           {active ? active.code : "ALL"}
           <ChevronDown className="size-3 text-faint" />
         </button>
@@ -86,34 +83,49 @@ export function StrandSwitcher({
     );
   }
 
+  if (collapsed) {
+    return (
+      <Menu width={264} className="block" trigger={
+        <button
+          type="button"
+          title={active ? `${active.code} · ${active.name}` : "Whole section"}
+          aria-label="Switch strand"
+          className="mx-auto grid size-9 place-items-center rounded-full text-muted transition-[transform,background-color,color] duration-[var(--dur-1)] hover:bg-surface-2 hover:text-ink active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color-mix(in_oklab,var(--ring)_50%,transparent)]"
+        >
+          <span className="font-mono text-[10px] font-bold">
+            {pending ? <Spinner className="size-3" /> : active ? active.code : "ALL"}
+          </span>
+        </button>
+      }>
+        {items}
+      </Menu>
+    );
+  }
+
   return (
-    <Menu width={264} className="block" trigger={
+    <Menu width={264} className="block w-full" trigger={
       <button
         type="button"
-        className="flex h-10 w-full items-center gap-2.5 rounded-[7px] px-2 text-left transition-[transform,background-color,border-color] duration-[var(--dur-1)] hover:bg-surface active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color-mix(in_oklab,var(--ring)_50%,transparent)]"
+        className="group flex h-10 w-full items-center gap-2.5 rounded-[7px] px-2 text-left transition-[transform,background-color,border-color] duration-[var(--dur-1)] hover:bg-surface active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color-mix(in_oklab,var(--ring)_50%,transparent)]"
       >
-        <span
-          style={active ? accentStyle(active.hue) : undefined}
-          className={cn(
-            "grid size-6 shrink-0 place-items-center rounded-[6px] font-mono text-[11px] font-bold",
-            active ? "a-tint-active a-text" : "bg-surface-2 text-muted"
-          )}
-        >
-          {pending ? (
-            <Spinner className="size-3" />
-          ) : active ? (
-            active.code[0]
-          ) : (
-            <Layers className="size-3.5" />
-          )}
-        </span>
+        {pending && <Spinner className="size-3 shrink-0 text-muted" />}
         <span className="min-w-0 flex-1">
           <span className="block truncate text-[13px] font-semibold leading-tight text-ink">
             {active ? active.code : "Whole section"}
           </span>
           {sectionLabel && (
-            <span className="block truncate text-[11px] leading-tight text-faint">
-              {sectionLabel}
+            <span className="block overflow-hidden [mask-image:linear-gradient(to_right,#000_84%,transparent)]">
+              <span className="flex w-max animate-[marquee_9s_linear_infinite] hover:[animation-play-state:paused] motion-reduce:animate-none">
+                <span className="whitespace-nowrap pr-8 text-[11px] leading-tight text-faint">
+                  {sectionLabel}
+                </span>
+                <span
+                  aria-hidden
+                  className="whitespace-nowrap pr-8 text-[11px] leading-tight text-faint"
+                >
+                  {sectionLabel}
+                </span>
+              </span>
             </span>
           )}
         </span>

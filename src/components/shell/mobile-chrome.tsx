@@ -23,7 +23,7 @@ export function MobileTopBar({
   const isAdmin = useIsAdmin();
 
   return (
-    <header className="sticky top-0 z-20 flex h-12 items-center gap-2 border-b border-line bg-shell/95 px-3 pt-[env(safe-area-inset-top)] backdrop-blur lg:hidden">
+    <header className="sticky top-0 z-30 flex h-12 items-center gap-2 border-b border-line bg-bg/95 px-3 pt-[env(safe-area-inset-top)] backdrop-blur lg:hidden">
       <h1 className="min-w-0 flex-1 truncate text-[15px] font-semibold tracking-[-0.01em] text-ink">
         {viewTitle(pathname)}
       </h1>
@@ -53,7 +53,7 @@ export function MobileTabs({ openCount }: { openCount: number }) {
   return (
     <nav
       aria-label="Views"
-      className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-4 border-t border-line bg-shell/95 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:hidden"
+      className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-5 border-t border-line bg-bg/95 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:hidden"
     >
       {NAV.map((item) => {
         const active = isNavActive(item.href, pathname);
@@ -76,8 +76,11 @@ export function MobileTabs({ openCount }: { openCount: number }) {
                 strokeWidth={active ? 2 : 1.75}
               />
               {item.href === "/tasks" && openCount > 0 && (
-                <span className="tnum absolute -right-2 -top-1 grid h-3.5 min-w-3.5 place-items-center rounded-full bg-brand px-0.5 font-mono text-[9px] font-semibold leading-none text-on-brand">
-                  {openCount > 99 ? "99" : openCount}
+                <span
+                  aria-label={`${openCount} open tasks`}
+                  className="tnum absolute -right-2 -top-1 grid h-3.5 min-w-3.5 place-items-center rounded-full bg-brand px-0.5 font-mono text-[9px] font-semibold leading-none text-on-brand"
+                >
+                  {openCount > 99 ? "99+" : openCount}
                 </span>
               )}
             </span>

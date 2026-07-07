@@ -34,7 +34,7 @@ export interface SubjectFull extends Subject {
   teacher: Teacher | null;
 }
 
-/** class = a subject meets · break = recess/lunch · fixture = assembly, cleaning, SSG… */
+/** class = a subject meets · break = recess/lunch · fixture = assembly, cleaning, SYG… */
 export type PeriodKind = "class" | "break" | "fixture";
 
 export interface Period {
@@ -57,6 +57,24 @@ export interface PeriodFull extends Period {
   subject: SubjectFull | null;
   /** resolved: override ?? subject teacher */
   teacher: Teacher | null;
+}
+
+/** async = no physical class · no_class = holiday/suspension, nothing scheduled */
+export type DayMarkKind = "async" | "no_class";
+
+/**
+ * A calendar override on one specific date. Where a `Period` recurs weekly,
+ * a `DayMark` names a single date (e.g. "this Wednesday is Async") and takes
+ * over that day's schedule rendering.
+ */
+export interface DayMark {
+  /** YYYY-MM-DD (local) — one mark per date */
+  date: string;
+  kind: DayMarkKind;
+  /** optional title override; else the kind's default name */
+  label: string | null;
+  /** optional clarification shown with the day */
+  note: string | null;
 }
 
 export interface TaskType {
@@ -89,6 +107,8 @@ export interface Task {
   status: TaskStatus;
   /** original YYYY-MM-DD when the date was moved */
   movedFrom: string | null;
+  /** why it was called off — shown only when status is "cancelled" (optional) */
+  cancelReason: string | null;
   /** clarification shown with the task ("waiting for teacher's go signal…") */
   note: string | null;
   points: number | null;

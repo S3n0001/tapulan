@@ -3,11 +3,15 @@
   "version": "1.0.0",
   "private": true,
   "description": "Class schedule + requirements tracker for a PH Senior High section (STEM · ABM · HUMSS)",
+  "bin": {
+    "tapulan": "cli/tapulan.mjs"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "cli": "node cli/tapulan.mjs"
   },
   "dependencies": {
     "better-sqlite3": "^12.4.1",

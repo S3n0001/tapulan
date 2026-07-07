@@ -75,7 +75,9 @@ export function fromISODate(iso: string): Date {
 }
 
 export function isISODate(value: string): boolean {
-  return /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(fromISODate(value).getTime());
+  // round-trip so calendar-impossible dates (Feb 31, month 13) that Date
+  // would silently normalize to another day are rejected
+  return /^\d{4}-\d{2}-\d{2}$/.test(value) && toISODate(fromISODate(value)) === value;
 }
 
 export function addDays(d: Date, days: number): Date {
@@ -96,6 +98,39 @@ export function schoolWeekMonday(d: Date): Date {
   if (day === 0) return addDays(d, 1); // Sunday → tomorrow
   if (day === 6) return addDays(d, 2); // Saturday → Monday
   return addDays(d, 1 - day);
+}
+
+// ----------------------------------------------------------------- months
+
+/** First day of the month containing `d`. */
+export function startOfMonth(d: Date): Date {
+  return new Date(d.getFullYear(), d.getMonth(), 1);
+}
+
+/** First day of the month `n` months away from `d`'s month. */
+export function addMonths(d: Date, n: number): Date {
+  return new Date(d.getFullYear(), d.getMonth() + n, 1);
+}
+
+/** "2026-07" — the month key used by the calendar's `?m=` param. */
+export function monthKeyOf(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
+/** Validate a `?m=` value into a month key, or null when malformed. */
+export function parseMonthKey(value: string | undefined): string | null {
+  if (!value) return null;
+  const m = /^(\d{4})-(\d{2})$/.exec(value);
+  if (!m) return null;
+  const month = Number(m[2]);
+  return month >= 1 && month <= 12 ? value : null;
+}
+
+const FMT_MONTH = new Intl.DateTimeFormat("en-PH", { month: "long", year: "numeric" });
+
+/** "July 2026" */
+export function fmtMonthYear(d: Date): string {
+  return FMT_MONTH.format(d);
 }
 
 const FMT_LONG = new Intl.DateTimeFormat("en-PH", {
@@ -120,11 +155,22 @@ export function fmtDateShort(iso: string): string {
   return FMT_SHORT.format(fromISODate(iso));
 }
 
-/** Compact due label: "3d overdue" · "Today" · "Tomorrow" · "Thu · Jul 16" */
-export function dueLabel(iso: string, from: Date): string {
+/**
+ * True once the deadline has passed. A `dueTime` (minutes from midnight)
+ * makes a same-day deadline expire at that minute; null = end of day.
+ */
+export function isPastDue(iso: string, dueTime: number | null, from: Date): boolean {
+  const days = daysUntil(iso, from);
+  if (days < 0) return true;
+  if (days === 0 && dueTime !== null) return minutesOf(from) >= dueTime;
+  return false;
+}
+
+/** Compact due label: "3d overdue" · "Overdue" · "Today" · "Tomorrow" · "Thu · Jul 16" */
+export function dueLabel(iso: string, from: Date, dueTime: number | null = null): string {
   const days = daysUntil(iso, from);
   if (days < 0) return days === -1 ? "1d overdue" : `${-days}d overdue`;
-  if (days === 0) return "Today";
+  if (days === 0) return isPastDue(iso, dueTime, from) ? "Overdue" : "Today";
   if (days === 1) return "Tomorrow";
   if (days <= 6) return fmtDateMed(iso);
   return fmtDateShort(iso);
@@ -132,10 +178,10 @@ export function dueLabel(iso: string, from: Date): string {
 
 export type DueTone = "danger" | "warn" | "soon" | "normal";
 
-export function dueTone(iso: string, from: Date): DueTone {
+export function dueTone(iso: string, from: Date, dueTime: number | null = null): DueTone {
   const days = daysUntil(iso, from);
   if (days < 0) return "danger";
-  if (days === 0) return "warn";
+  if (days === 0) return isPastDue(iso, dueTime, from) ? "danger" : "warn";
   if (days <= 2) return "soon";
   return "normal";
 }

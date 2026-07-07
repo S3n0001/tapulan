@@ -80,7 +80,11 @@ Vocabulary lives in globals.css; components bind via `usePresence` (mount-throug
 - Exits keyed on `[data-state="closed"]`: pop-out / sheet-down / panel-out / fade-out.
 - Feedback: `.tap` / `.press` scale-on-active for buttons, chips, checks (70ms);
   `done-pop` + `done-tick` SVG stroke draw on the personal check; sliding thumb on
-  segmented controls; the live "now" dot pulse is the only loop.
+  segmented controls; `anim-underline` on tab switches; the week's now-line and
+  gutter time chip glide on the minute tick (`transition: top`, linear).
+- Loading: route-level skeletons mirror each view's exact geometry (`.skeleton`,
+  a quiet opacity pulse — never a gradient sweep), so the content swap is a
+  no-shift replace. The live "now" dot pulse and the skeleton pulse are the only loops.
 - Durations 70–240ms; `--ease` (out-quint) for entrances, `--ease-out`/`--ease-in` for
   exits. Full `prefers-reduced-motion` collapse.
 
@@ -93,6 +97,14 @@ Vocabulary lives in globals.css; components bind via `usePresence` (mount-throug
   by subject hue with density tiers by block height; greedy interval-column layout for
   overlapping (split) blocks; cobalt now-line through today; mobile gets day tabs + a
   single proportional column.
+- **Calendar:** a true month canvas, Monday-first, filling the panel (rows flex to
+  viewport; chips-per-cell derived from measured row height, overflow behind a "+n more"
+  per-day popover). Deadline chips are type-hued (bar · title · unconfirmed dot · mono
+  time); handled work strikes and recedes; open-but-past flips to danger. Day marks reuse
+  the week vocabulary in miniature — async wash, hatched no-class, tinted band. Weekends
+  sit on a darker wash; adjacent-month days fade; today = cobalt badge. Mobile: dot-grid
+  month (type-hue dots, mark underline bars, swipe to page) over a selected-day agenda of
+  standard task rows. Months page client-side, mirrored to `?m=YYYY-MM`.
 - **Tasks:** issue-tracker list — fixed-width aligned columns (check · type badge · title
   + flags · subject · pts · due), sticky bucket headers, type-filter chips with counts.
   Selection lives in the URL (`?task=id`) so ⌘K, Today, and shared links open the same

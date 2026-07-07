@@ -2,25 +2,29 @@
 
 import { useMemo, useState } from "react";
 import { CalendarPlus, Plus } from "lucide-react";
-import type { PeriodFull, Strand, SubjectFull, Teacher } from "@/lib/domain/types";
-import { DAY_NAMES, fmtDuration, fmtMin } from "@/lib/domain/time";
+import type { DayMark, PeriodFull, Strand, SubjectFull, Teacher } from "@/lib/domain/types";
+import { DAY_NAMES, fmtDateMed, fmtDuration, fmtMin, toISODate } from "@/lib/domain/time";
 import { accentStyle } from "@/lib/domain/hues";
+import { DAY_MARK_HUE, DAY_MARK_SHORT, dayMarkTitle } from "@/lib/domain/day-mark";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty";
 import { PeriodEditor } from "./period-editor";
+import { DayMarkEditor } from "./day-mark-editor";
 
-/** The full weekly grid as an editable list, grouped by day. */
+/** The weekly grid + calendar overrides as an editable list, grouped by day. */
 export function ScheduleTab({
   periods,
   subjects,
   teachers,
   strands,
+  dayMarks,
 }: {
   periods: PeriodFull[];
   subjects: SubjectFull[];
   teachers: Teacher[];
   strands: Strand[];
+  dayMarks: DayMark[];
 }) {
   const [editing, setEditing] = useState<PeriodFull | "new" | null>(null);
   const [newDay, setNewDay] = useState(1);
@@ -37,6 +41,8 @@ export function ScheduleTab({
 
   return (
     <div>
+      <CalendarSection dayMarks={dayMarks} />
+
       <div className="flex h-11 items-center gap-2 border-b border-line px-3.5 lg:px-4">
         <span className="tnum font-mono text-[12px] text-faint">
           {periods.length} periods · Mon–Fri
@@ -165,6 +171,79 @@ export function ScheduleTab({
           subjects={subjects}
           teachers={teachers}
           strands={strands}
+          open
+          onClose={() => setEditing(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------- calendar section */
+
+/** Date-specific async / no-class overrides, above the weekly template. */
+function CalendarSection({ dayMarks }: { dayMarks: DayMark[] }) {
+  const [editing, setEditing] = useState<DayMark | "new" | null>(null);
+
+  return (
+    <div className="border-b border-line">
+      <div className="flex h-11 items-center gap-2 px-3.5 lg:px-4">
+        <span className="tnum font-mono text-[12px] text-faint">
+          {dayMarks.length} calendar {dayMarks.length === 1 ? "override" : "overrides"} · async /
+          no-class
+        </span>
+        <Button
+          size="sm"
+          variant="secondary"
+          className="ml-auto"
+          onClick={() => setEditing("new")}
+        >
+          <CalendarPlus className="size-3.5" />
+          Mark a day
+        </Button>
+      </div>
+
+      {dayMarks.length === 0 ? (
+        <p className="px-3.5 pb-3 text-[12.5px] leading-relaxed text-muted lg:px-4">
+          No async or no-class days yet. Mark one when a date breaks from the normal weekly
+          schedule — it takes over that day in Today and Week.
+        </p>
+      ) : (
+        <ul className="divide-y divide-line/60 border-t border-line/60">
+          {dayMarks.map((m) => (
+            <li key={m.date}>
+              <button
+                type="button"
+                onClick={() => setEditing(m)}
+                className="flex w-full items-center gap-3 px-3.5 py-2 text-left transition-colors duration-[var(--dur-1)] hover:bg-surface/70 lg:px-4"
+              >
+                <span className="tnum w-[92px] shrink-0 font-mono text-[12px] text-muted">
+                  {fmtDateMed(m.date)}
+                </span>
+                <span
+                  style={accentStyle(DAY_MARK_HUE[m.kind])}
+                  className="a-text a-tint-2 shrink-0 rounded-[4px] px-1.5 py-px font-mono text-[10px] font-semibold uppercase tracking-[0.04em]"
+                >
+                  {DAY_MARK_SHORT[m.kind]}
+                </span>
+                <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-ink">
+                  {dayMarkTitle(m)}
+                </span>
+                {m.note && (
+                  <span className="hidden max-w-[42%] shrink truncate text-[12px] text-muted sm:block">
+                    {m.note}
+                  </span>
+                )}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {editing !== null && (
+        <DayMarkEditor
+          mark={editing === "new" ? null : editing}
+          defaultDate={toISODate(new Date())}
           open
           onClose={() => setEditing(null)}
         />

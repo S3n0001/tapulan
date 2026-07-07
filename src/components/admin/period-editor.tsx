@@ -15,7 +15,7 @@ import { useConfirm } from "@/components/ui/confirm";
 const KIND_LABEL: Record<PeriodKind, string> = {
   class: "Class — a subject meets",
   break: "Break — recess, lunch",
-  fixture: "Fixture — assembly, cleaning, SSG",
+  fixture: "Fixture — assembly, cleaning, SYG",
 };
 
 interface FormState {
@@ -139,6 +139,7 @@ export function PeriodEditor({
     <Panel
       open={open}
       onClose={onClose}
+      onCmdEnter={submit}
       wide
       title={period ? "Edit period" : "New period"}
       description={`${DAY_SHORT[form.day]} · ${form.start || "—"}–${form.end || "—"}`}

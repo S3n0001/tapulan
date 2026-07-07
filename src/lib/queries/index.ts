@@ -1,6 +1,8 @@
 import "server-only";
 import { getDb, getMeta } from "@/lib/db";
 import type {
+  DayMark,
+  DayMarkKind,
   Period,
   PeriodFull,
   Settings,
@@ -47,6 +49,13 @@ interface PeriodRow {
   strand: StrandCode | null;
 }
 
+interface DayMarkRow {
+  date: string;
+  kind: DayMarkKind;
+  label: string | null;
+  note: string | null;
+}
+
 interface TaskRow {
   id: number;
   title: string;
@@ -57,6 +66,7 @@ interface TaskRow {
   due_time: number | null;
   status: Task["status"];
   moved_from: string | null;
+  cancel_reason: string | null;
   note: string | null;
   points: number | null;
   created_at: string;
@@ -110,6 +120,7 @@ function mapTask(row: TaskRow): Task {
     dueTime: row.due_time,
     status: row.status,
     movedFrom: row.moved_from,
+    cancelReason: row.cancel_reason,
     note: row.note,
     points: row.points,
     createdAt: row.created_at,
@@ -197,6 +208,33 @@ export function getPeriods(strand?: StrandCode | null): PeriodFull[] {
   });
 }
 
+// ------------------------------------------------------------- day marks
+
+/** All calendar overrides, soonest first. For the admin calendar list. */
+export function getDayMarks(): DayMark[] {
+  return getDb()
+    .prepare("SELECT date, kind, label, note FROM day_marks ORDER BY date")
+    .all() as DayMarkRow[];
+}
+
+/** The override for a single date, or null. For the Today view. */
+export function getDayMark(iso: string): DayMark | null {
+  const row = getDb()
+    .prepare("SELECT date, kind, label, note FROM day_marks WHERE date = ?")
+    .get(iso) as DayMarkRow | undefined;
+  return row ?? null;
+}
+
+/** Overrides in [fromISO, toISO], keyed by date. For the Week view. */
+export function getDayMarkMap(fromISO: string, toISO: string): Map<string, DayMark> {
+  const rows = getDb()
+    .prepare(
+      "SELECT date, kind, label, note FROM day_marks WHERE date BETWEEN ? AND ? ORDER BY date"
+    )
+    .all(fromISO, toISO) as DayMarkRow[];
+  return new Map(rows.map((r) => [r.date, r]));
+}
+
 export function getTaskTypes(): TaskType[] {
   return getDb().prepare("SELECT * FROM task_types ORDER BY sort, id").all() as TaskType[];
 }
@@ -280,6 +318,7 @@ export function exportAll() {
     teachers: db.prepare("SELECT * FROM teachers").all(),
     subjects: db.prepare("SELECT * FROM subjects").all(),
     periods: db.prepare("SELECT * FROM periods").all(),
+    dayMarks: db.prepare("SELECT * FROM day_marks").all(),
     taskTypes: db.prepare("SELECT * FROM task_types").all(),
     tasks: db.prepare("SELECT * FROM tasks").all(),
     taskLinks: db.prepare("SELECT * FROM task_links").all(),

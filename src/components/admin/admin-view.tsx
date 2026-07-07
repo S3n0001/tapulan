@@ -4,7 +4,9 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Lock, LogOut } from "lucide-react";
 import { login, logout } from "@/actions/admin";
+import type { ApiToken } from "@/lib/auth/tokens";
 import type {
+  DayMark,
   PeriodFull,
   Settings,
   Strand,
@@ -111,8 +113,10 @@ export function AdminDashboard({
   periods,
   teachers,
   strands,
+  dayMarks,
   settings,
   counts,
+  tokens,
 }: {
   nowISO: string;
   tasks: TaskFull[];
@@ -121,8 +125,10 @@ export function AdminDashboard({
   periods: PeriodFull[];
   teachers: Teacher[];
   strands: Strand[];
+  dayMarks: DayMark[];
   settings: Settings;
   counts: { tasks: number; periods: number; subjects: number };
+  tokens: ApiToken[];
 }) {
   const toast = useToast();
   const [pending, start] = useTransition();
@@ -173,7 +179,7 @@ export function AdminDashboard({
               >
                 {t.label}
                 {active && (
-                  <span className="absolute inset-x-1.5 bottom-0 h-[2px] rounded-full bg-brand" />
+                  <span className="anim-underline absolute inset-x-1.5 bottom-0 h-[2px] rounded-full bg-brand" />
                 )}
               </button>
             );
@@ -186,12 +192,18 @@ export function AdminDashboard({
           <TasksView tasks={tasks} subjects={subjects} types={types} nowISO={nowISO} embedded />
         )}
         {tab === "schedule" && (
-          <ScheduleTab periods={periods} subjects={subjects} teachers={teachers} strands={strands} />
+          <ScheduleTab
+            periods={periods}
+            subjects={subjects}
+            teachers={teachers}
+            strands={strands}
+            dayMarks={dayMarks}
+          />
         )}
         {tab === "subjects" && (
           <SubjectsTab subjects={subjects} teachers={teachers} strands={strands} />
         )}
-        {tab === "settings" && <SettingsTab settings={settings} counts={counts} />}
+        {tab === "settings" && <SettingsTab settings={settings} counts={counts} tokens={tokens} />}
       </div>
     </div>
   );

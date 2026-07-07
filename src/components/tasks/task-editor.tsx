@@ -29,6 +29,7 @@ interface FormState {
   status: TaskStatus;
   points: string;
   note: string;
+  cancelReason: string;
   movedFrom: string;
   links: TaskLinkInput[];
 }
@@ -45,6 +46,7 @@ function initial(task: TaskFull | null, subjects: SubjectFull[], types: TaskType
       status: task.status,
       points: task.points !== null ? String(task.points) : "",
       note: task.note ?? "",
+      cancelReason: task.cancelReason ?? "",
       movedFrom: task.movedFrom ?? "",
       links: task.links.map((l) => ({ label: l.label, url: l.url, kind: l.kind })),
     };
@@ -59,6 +61,7 @@ function initial(task: TaskFull | null, subjects: SubjectFull[], types: TaskType
     status: "confirmed",
     points: "",
     note: "",
+    cancelReason: "",
     movedFrom: "",
     links: [],
   };
@@ -140,6 +143,7 @@ export function TaskEditor({
       dueTime: inputToMin(form.dueTime),
       status: form.status,
       movedFrom: form.movedFrom || null,
+      cancelReason: form.cancelReason || null,
       note: form.note || null,
       points: form.points.trim() === "" ? null : Number(form.points),
       links: form.links,
@@ -161,6 +165,7 @@ export function TaskEditor({
     <Panel
       open={open}
       onClose={onClose}
+      onCmdEnter={submit}
       wide
       title={task ? "Edit task" : "New task"}
       description={task ? task.subject.name : "A new requirement for the whole section"}
@@ -262,6 +267,22 @@ export function TaskEditor({
             />
           </Field>
         </div>
+
+        {form.status === "cancelled" && (
+          <Field
+            label="Cancellation reason"
+            hint="optional — shown on the cancelled task"
+            htmlFor="t-cancel-reason"
+          >
+            <Textarea
+              id="t-cancel-reason"
+              rows={2}
+              value={form.cancelReason}
+              placeholder="e.g. Folded into next week's unit test."
+              onChange={(e) => set("cancelReason", e.target.value)}
+            />
+          </Field>
+        )}
 
         <Field label="Details" hint="coverage, format, what to bring" htmlFor="t-details">
           <Textarea

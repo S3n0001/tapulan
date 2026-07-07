@@ -26,7 +26,10 @@ export function DoneCheck({
       aria-pressed={done}
       aria-label={done ? "Mark as not done" : "Mark as done for me"}
       className={cn(
-        "flex size-[18px] shrink-0 items-center justify-center rounded-[5px] border transition-[transform,background-color,border-color,color] duration-[var(--dur-1)] active:scale-90 active:duration-[var(--dur-0)]",
+        // mobile-only ::before widens the touch target around the 18px box —
+        // the single most-tapped one-thumb control — kept short vertically so
+        // stacked rows don't overlap
+        "relative flex size-[18px] shrink-0 items-center justify-center rounded-[5px] border transition-[transform,background-color,border-color,color] duration-[var(--dur-1)] before:absolute before:-inset-x-3 before:-inset-y-2 before:content-[''] lg:before:hidden active:scale-90 active:duration-[var(--dur-0)]",
         done
           ? "done-pop border-transparent bg-ok text-white"
           : "border-line-strong text-transparent hover:border-ok hover:text-[color-mix(in_oklab,var(--ok)_45%,transparent)]",

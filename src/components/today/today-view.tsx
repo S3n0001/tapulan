@@ -1,17 +1,37 @@
 "use client";
 
+import { useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { CalendarDays, CheckCircle2, Inbox } from "lucide-react";
-import type { PeriodFull, TaskFull } from "@/lib/domain/types";
+import {
+  ArrowRight,
+  CalendarDays,
+  CalendarOff,
+  CalendarRange,
+  CheckCircle2,
+  Inbox,
+  Laptop,
+} from "lucide-react";
+import type { DayMark, PeriodFull, TaskFull } from "@/lib/domain/types";
 import { liveForDay, periodProgress } from "@/lib/domain/schedule";
 import {
+  DAY_MARK_ASYNC_POINTS,
+  DAY_MARK_BLURB,
+  DAY_MARK_HUE,
+  DAY_MARK_SHORT,
+  dayMarkTitle,
+} from "@/lib/domain/day-mark";
+import { isActionable } from "@/lib/domain/tasks";
+import {
   DAY_NAMES,
+  daysUntil,
   dueLabel,
   dueTone,
+  fmtDateMed,
   fmtDuration,
   fmtMin,
   fmtMinAmPm,
+  isPastDue,
   minutesOf,
   type DueTone,
 } from "@/lib/domain/time";
@@ -23,6 +43,7 @@ import { Toolbar } from "@/components/shell/toolbar";
 import { HueBadge, WarnFlag } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty";
 import { DoneCheck } from "@/components/tasks/done-check";
+import { useClassDetail } from "@/components/classes/class-detail";
 
 const DATE_FMT = new Intl.DateTimeFormat("en-PH", {
   weekday: "short",
@@ -39,7 +60,8 @@ export function TodayView({
   day,
   isToday,
   dateISO,
-  soon,
+  mark,
+  tasks,
   nowISO,
   showStrand,
 }: {
@@ -49,14 +71,19 @@ export function TodayView({
   isToday: boolean;
   /** the calendar date that `day` refers to */
   dateISO: string;
-  soon: TaskFull[];
+  /** async / no-class override for this date, if any */
+  mark: DayMark | null;
+  /** the whole strand-scoped task list — the rail buckets it client-side */
+  tasks: TaskFull[];
   nowISO: string;
   /** no strand picked — label the strand-split rows */
   showStrand: boolean;
 }) {
   const now = useNow(nowISO, 30_000);
   const nowMin = minutesOf(now);
-  const live = liveForDay(dayPeriods, nowMin, isToday);
+  // an async / no-class day has nothing "live" — neutralize the timeline state
+  const liveActive = isToday && mark === null;
+  const live = liveForDay(dayPeriods, nowMin, liveActive);
   const shownDate = new Date(dateISO);
 
   return (
@@ -86,27 +113,85 @@ export function TodayView({
           )}
 
           <div className="p-3.5 lg:p-4">
-            <NowStrip periods={dayPeriods} live={live} nowMin={nowMin} isToday={isToday} />
+            {mark ? (
+              <DayMarkHero mark={mark} day={day} isToday={isToday} />
+            ) : (
+              <NowStrip periods={dayPeriods} live={live} nowMin={nowMin} isToday={isToday} />
+            )}
           </div>
 
-          <DayTimeline
-            periods={dayPeriods}
-            live={live}
-            nowMin={nowMin}
-            isToday={isToday}
-            showStrand={showStrand}
-          />
+          {/* no-class blanks the day; async keeps the subjects as a study list */}
+          {mark?.kind !== "no_class" && (
+            <DayTimeline
+              periods={dayPeriods}
+              live={live}
+              nowMin={nowMin}
+              isToday={liveActive}
+              showStrand={showStrand}
+              asyncDay={mark?.kind === "async"}
+            />
+          )}
         </section>
 
         <aside className="border-t border-line lg:border-t-0">
-          <h2 className="flex h-9 items-center gap-2 border-b border-line/70 px-3.5 font-mono text-[10.5px] font-semibold uppercase tracking-[0.06em] text-faint lg:px-4">
-            Due soon
-            <span className="tnum">{soon.length}</span>
-            <span className="ml-auto font-normal normal-case tracking-normal">next 7 days</span>
-          </h2>
-          <DueSoonList tasks={soon} now={now} />
+          <DueRail tasks={tasks} now={now} />
         </aside>
       </div>
+    </div>
+  );
+}
+
+/* --------------------------------------------------------- day-mark hero */
+
+/**
+ * Replaces the now-strip on an async / no-class day: one calm card stating
+ * what the day is, since nothing is "live" to count down.
+ */
+function DayMarkHero({
+  mark,
+  day,
+  isToday,
+}: {
+  mark: DayMark;
+  day: number;
+  isToday: boolean;
+}) {
+  const Icon = mark.kind === "async" ? Laptop : CalendarOff;
+  return (
+    <div
+      style={accentStyle(DAY_MARK_HUE[mark.kind])}
+      className="a-tint a-border rounded-[var(--r-card)] border px-3.5 py-3"
+    >
+      <div className="flex items-center gap-2">
+        <Icon className="a-text size-4 shrink-0" strokeWidth={1.75} />
+        <span className="font-mono text-[10.5px] font-semibold uppercase tracking-[0.08em] text-muted">
+          {isToday ? "Today" : DAY_NAMES[day]}
+        </span>
+        <span className="a-text a-tint-2 ml-auto rounded-[4px] px-1.5 py-px font-mono text-[10px] font-semibold uppercase tracking-[0.04em]">
+          {DAY_MARK_SHORT[mark.kind]}
+        </span>
+      </div>
+      <p className="mt-1.5 text-[15px] font-semibold leading-snug tracking-[-0.01em] text-ink">
+        {dayMarkTitle(mark)}
+      </p>
+      <p className="mt-0.5 text-[12.5px] leading-relaxed text-muted">
+        {mark.note?.trim() || DAY_MARK_BLURB[mark.kind]}
+      </p>
+      {mark.kind === "async" && (
+        <ul className="mt-3 space-y-1.5 border-t border-line/60 pt-2.5">
+          {DAY_MARK_ASYNC_POINTS.map((point) => (
+            <li
+              key={point.label}
+              className="flex items-start gap-2 text-[12px] leading-snug text-muted"
+            >
+              <span className="a-dot mt-[5px] size-1 shrink-0 rounded-full" aria-hidden />
+              <span>
+                <span className="font-medium text-ink">{point.label}</span> — {point.text}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
@@ -127,7 +212,8 @@ function NowStrip({
   // a strand-split block means several classes share the current slot
   const currents = periods.filter((p) => live.states.get(p.id) === "current");
   const current = currents[0] ?? null;
-  const next = periods.find((p) => p.id === live.nextId) ?? null;
+  // the next *class* — skip breaks/fixtures so "Next" never announces Recess
+  const next = periods.find((p) => p.id === live.nextClassId) ?? null;
 
   if (!isToday) {
     return next ? <UpNextCard period={next} label="First period" isToday={false} nowMin={nowMin} /> : null;
@@ -148,7 +234,6 @@ function NowStrip({
         className="a-tint a-border rounded-[var(--r-card)] border px-3.5 py-3"
       >
         <div className="flex items-center gap-2">
-          <span className="live-dot size-1.5 rounded-full bg-ok" aria-hidden />
           <span className="font-mono text-[10.5px] font-semibold uppercase tracking-[0.08em] text-muted">
             Now
           </span>
@@ -290,13 +375,18 @@ function DayTimeline({
   nowMin,
   isToday,
   showStrand,
+  asyncDay = false,
 }: {
   periods: PeriodFull[];
   live: ReturnType<typeof liveForDay>;
   nowMin: number;
   isToday: boolean;
   showStrand: boolean;
+  /** async day — subjects are shown for self-study, nothing is live */
+  asyncDay?: boolean;
 }) {
+  const { openClass } = useClassDetail();
+
   if (periods.length === 0) {
     return (
       <EmptyState icon={CalendarDays} title="No periods on this day">
@@ -307,6 +397,14 @@ function DayTimeline({
 
   return (
     <div className="pb-4">
+      {asyncDay && (
+        <p className="flex items-center gap-1.5 px-3.5 pb-1.5 lg:px-4">
+          <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.06em] text-faint">
+            Subjects today
+          </span>
+          <span className="text-[11.5px] text-faint">· asynchronous, no in-person meeting</span>
+        </p>
+      )}
       {periods.map((p) => {
         const state = live.states.get(p.id) ?? "upcoming";
         const isCurrent = state === "current";
@@ -399,15 +497,17 @@ function DayTimeline({
         );
 
         if (p.subject) {
+          const subjectId = p.subject.id;
           return (
-            <Link
+            <button
               key={p.id}
-              href={`/classes?c=${p.subject.id}`}
+              type="button"
+              onClick={() => openClass(subjectId)}
               style={accentStyle(hue)}
-              className={rowClass}
+              className={cn(rowClass, "w-full cursor-pointer text-left")}
             >
               {rowContent}
-            </Link>
+            </button>
           );
         }
 
@@ -431,64 +531,209 @@ const TONE_TEXT: Record<DueTone, string> = {
   normal: "text-muted",
 };
 
-function DueSoonList({ tasks, now }: { tasks: TaskFull[]; now: Date }) {
+type Horizon = 7 | 14 | 30;
+const HORIZONS: Horizon[] = [7, 14, 30];
+
+/**
+ * The "due soon" rail. Splits the full task list into overdue / within the
+ * chosen horizon / further out — so a deadline next week is a visible count
+ * with a link to the calendar, never silently dropped past a 7-day window.
+ */
+function DueRail({ tasks, now }: { tasks: TaskFull[]; now: Date }) {
   const router = useRouter();
   const { isDone, toggle } = useDone();
+  const [horizon, setHorizon] = useState<Horizon>(7);
 
-  const visible = tasks.filter((t) => t.status !== "done" && !isDone(t.id));
+  // personal "done" is device-local; drop it alongside section done/cancelled
+  const active = tasks.filter((t) => isActionable(t) && !isDone(t.id));
+  const od = active.filter((t) => isPastDue(t.dueDate, t.dueTime, now));
+  const upcoming = active.filter((t) => !isPastDue(t.dueDate, t.dueTime, now));
+  const within = upcoming.filter((t) => daysUntil(t.dueDate, now) <= horizon);
+  const later = upcoming.filter((t) => daysUntil(t.dueDate, now) > horizon);
+  const nearest = upcoming[0] ?? null; // list is due-sorted → first is soonest
 
-  if (visible.length === 0) {
-    return (
-      <EmptyState icon={Inbox} title="Nothing due this week" className="py-10">
-        The next seven days are clear. Check Tasks for what&apos;s further out.
-      </EmptyState>
-    );
-  }
+  const open = (id: number) => router.push(`/tasks?task=${id}`);
 
   return (
-    <ul className="divide-y divide-line/60">
-      {visible.map((t) => {
-        const tone = dueTone(t.dueDate, now);
-        return (
-          <li key={t.id} className="flex items-center gap-2.5 px-3.5 py-2 transition-colors hover:bg-surface/70 lg:px-4">
-            <DoneCheck done={isDone(t.id)} onToggle={() => toggle(t.id)} className="size-4 rounded-[4px]" />
+    <>
+      <div className="flex h-9 items-center gap-2 border-b border-line/70 px-3.5 lg:px-4">
+        <h2 className="font-mono text-[10.5px] font-semibold uppercase tracking-[0.06em] text-faint">
+          Due soon
+        </h2>
+        <div className="ml-auto flex items-center gap-0.5" role="group" aria-label="Due horizon">
+          {HORIZONS.map((h) => (
             <button
+              key={h}
               type="button"
-              onClick={() => router.push(`/tasks?task=${t.id}`)}
-              className="flex min-w-0 flex-1 items-center gap-2 text-left"
+              onClick={() => setHorizon(h)}
+              aria-pressed={horizon === h}
+              className={cn(
+                "tnum tap rounded-[var(--r-chip)] px-1.5 py-0.5 font-mono text-[10.5px] font-medium transition-colors duration-[var(--dur-1)]",
+                horizon === h
+                  ? "bg-[color-mix(in_oklab,var(--brand)_16%,var(--bg))] text-brand-text"
+                  : "text-faint hover:text-muted"
+              )}
             >
-              <HueBadge hue={t.type.hue} className="w-10 justify-center">
-                {t.type.short}
-              </HueBadge>
-              <span className="min-w-0 flex-1">
-                <span className="flex items-center gap-1.5">
-                  <span className="truncate text-[12.5px] font-medium leading-snug text-ink">
-                    {t.title}
-                  </span>
-                  {(t.movedFrom || t.status === "tentative") && (
-                    <WarnFlag>{t.movedFrom ? "moved" : "unconfirmed"}</WarnFlag>
-                  )}
-                </span>
-                <span
-                  style={accentStyle(t.subject.hue)}
-                  className="mt-0.5 flex items-center gap-1 font-mono text-[10.5px] text-faint"
-                >
-                  <span className="a-dot size-1 rounded-full" />
-                  {t.subject.short}
-                </span>
-              </span>
-              <span
-                className={cn(
-                  "tnum shrink-0 font-mono text-[11.5px] font-medium",
-                  TONE_TEXT[tone]
-                )}
-              >
-                {dueLabel(t.dueDate, now)}
-              </span>
+              {h}d
             </button>
-          </li>
-        );
-      })}
-    </ul>
+          ))}
+        </div>
+      </div>
+
+      {od.length === 0 && within.length === 0 ? (
+        <EmptyState
+          icon={Inbox}
+          title={nearest ? "Nothing due soon" : "All clear"}
+          className="py-10"
+        >
+          {nearest ? (
+            <>
+              Next up is <span className="font-medium text-ink">{nearest.title}</span> ·{" "}
+              <span className="tnum font-mono">{fmtDateMed(nearest.dueDate)}</span>.{" "}
+              <Link href="/calendar" className="text-brand-text hover:underline">
+                Open the calendar
+              </Link>
+              .
+            </>
+          ) : (
+            <>New requirements show up here the moment an admin posts them.</>
+          )}
+        </EmptyState>
+      ) : (
+        <>
+          {od.length > 0 && (
+            <DueGroup label="Overdue" count={od.length} danger>
+              <ul className="divide-y divide-line/60">
+                {od.map((t) => (
+                  <DueRow
+                    key={t.id}
+                    task={t}
+                    now={now}
+                    done={isDone(t.id)}
+                    onToggle={() => toggle(t.id)}
+                    onOpen={() => open(t.id)}
+                  />
+                ))}
+              </ul>
+            </DueGroup>
+          )}
+
+          <DueGroup label={`Next ${horizon} days`} count={within.length}>
+            {within.length > 0 ? (
+              <ul className="divide-y divide-line/60">
+                {within.map((t) => (
+                  <DueRow
+                    key={t.id}
+                    task={t}
+                    now={now}
+                    done={isDone(t.id)}
+                    onToggle={() => toggle(t.id)}
+                    onOpen={() => open(t.id)}
+                  />
+                ))}
+              </ul>
+            ) : (
+              <p className="px-3.5 py-3 text-[12px] text-faint lg:px-4">
+                Clear for the next {horizon} days.
+              </p>
+            )}
+          </DueGroup>
+
+          {later.length > 0 && (
+            <Link
+              href="/calendar"
+              className="flex items-center gap-2 border-t border-line/70 px-3.5 py-2.5 text-[12px] text-muted transition-colors hover:bg-surface/60 hover:text-ink lg:px-4"
+            >
+              <CalendarRange className="size-3.5 text-faint" />
+              <span>
+                <span className="tnum font-mono font-medium text-ink">{later.length}</span> due later
+              </span>
+              <ArrowRight className="ml-auto size-3.5 text-faint" />
+            </Link>
+          )}
+        </>
+      )}
+    </>
+  );
+}
+
+function DueGroup({
+  label,
+  count,
+  danger = false,
+  children,
+}: {
+  label: string;
+  count: number;
+  danger?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <section>
+      <div className="flex h-7 items-center gap-2 border-b border-line/60 bg-surface/30 px-3.5 lg:px-4">
+        <h3
+          className={cn(
+            "font-mono text-[10px] font-semibold uppercase tracking-[0.06em]",
+            danger ? "text-danger-text" : "text-muted"
+          )}
+        >
+          {label}
+        </h3>
+        <span className="tnum font-mono text-[10px] text-faint">{count}</span>
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function DueRow({
+  task,
+  now,
+  done,
+  onToggle,
+  onOpen,
+}: {
+  task: TaskFull;
+  now: Date;
+  done: boolean;
+  onToggle: () => void;
+  onOpen: () => void;
+}) {
+  const tone = dueTone(task.dueDate, now, task.dueTime);
+  return (
+    <li className="flex items-center gap-2.5 px-3.5 py-2 transition-colors hover:bg-surface/70 lg:px-4">
+      <DoneCheck done={done} onToggle={onToggle} className="size-4 rounded-[4px]" />
+      <button
+        type="button"
+        onClick={onOpen}
+        className="flex min-w-0 flex-1 items-center gap-2 text-left"
+      >
+        <HueBadge hue={task.type.hue} className="w-10 justify-center">
+          {task.type.short}
+        </HueBadge>
+        <span className="min-w-0 flex-1">
+          <span className="flex items-center gap-1.5">
+            <span className="truncate text-[12.5px] font-medium leading-snug text-ink">
+              {task.title}
+            </span>
+            {(task.movedFrom || task.status === "tentative") && (
+              <WarnFlag>{task.movedFrom ? "moved" : "unconfirmed"}</WarnFlag>
+            )}
+          </span>
+          <span
+            style={accentStyle(task.subject.hue)}
+            className="mt-0.5 flex items-center gap-1 font-mono text-[10.5px] text-faint"
+          >
+            <span className="a-dot size-1 rounded-full" />
+            {task.subject.short}
+          </span>
+        </span>
+        <span
+          className={cn("tnum shrink-0 font-mono text-[11.5px] font-medium", TONE_TEXT[tone])}
+        >
+          {dueLabel(task.dueDate, now, task.dueTime)}
+        </span>
+      </button>
+    </li>
   );
 }

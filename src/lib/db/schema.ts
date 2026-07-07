@@ -41,6 +41,16 @@ CREATE TABLE IF NOT EXISTS periods (
 );
 CREATE INDEX IF NOT EXISTS idx_periods_day ON periods(day, start_min);
 
+-- Calendar overrides for a single date: the day is asynchronous (no physical
+-- class) or has no class at all. One mark per date takes over that day's
+-- rendering in Today and Week. The weekly periods template is unchanged.
+CREATE TABLE IF NOT EXISTS day_marks (
+  date  TEXT PRIMARY KEY,                       -- YYYY-MM-DD (local)
+  kind  TEXT NOT NULL CHECK (kind IN ('async','no_class')),
+  label TEXT,                                   -- optional title override
+  note  TEXT                                    -- optional clarification
+);
+
 CREATE TABLE IF NOT EXISTS task_types (
   id    INTEGER PRIMARY KEY AUTOINCREMENT,
   name  TEXT NOT NULL,
@@ -60,6 +70,7 @@ CREATE TABLE IF NOT EXISTS tasks (
   status     TEXT NOT NULL DEFAULT 'confirmed'
              CHECK (status IN ('confirmed','tentative','done','cancelled')),
   moved_from TEXT,
+  cancel_reason TEXT,                          -- why it was called off (only when cancelled)
   note       TEXT,
   points     INTEGER,
   created_at TEXT NOT NULL,
@@ -76,4 +87,13 @@ CREATE TABLE IF NOT EXISTS task_links (
   sort    INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_task_links_task ON task_links(task_id);
+
+-- personal-access tokens for the CLI; only the SHA-256 digest is stored
+CREATE TABLE IF NOT EXISTS api_tokens (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  token_hash   TEXT NOT NULL UNIQUE,
+  label        TEXT NOT NULL,
+  created_at   TEXT NOT NULL,
+  last_used_at TEXT
+);
 `;

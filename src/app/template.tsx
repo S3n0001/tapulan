@@ -4,5 +4,7 @@
  * Collapses to an opacity-only no-op under `prefers-reduced-motion`.
  */
 export default function Template({ children }: { children: React.ReactNode }) {
-  return <div className="anim-view">{children}</div>;
+  // lg:h-full so full-height views (the week canvas) can size to the panel;
+  // taller pages simply overflow it and scroll in <main> as before
+  return <div className="anim-view lg:h-full">{children}</div>;
 }
