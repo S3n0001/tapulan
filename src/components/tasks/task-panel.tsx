@@ -8,22 +8,33 @@ import {
   Download,
   ExternalLink,
   FileText,
+  GraduationCap,
   Info,
   Link2,
   Pencil,
+  Repeat,
   RotateCcw,
   Trash2,
   XCircle,
 } from "lucide-react";
-import { cancelTask, confirmTask, deleteTask, moveTask } from "@/actions/tasks";
-import type { TaskFull } from "@/lib/domain/types";
+import {
+  cancelTask,
+  confirmTask,
+  deleteTask,
+  deleteTaskSeries,
+  describeTaskSeries,
+  moveTask,
+  setTaskDoneInClass,
+} from "@/actions/tasks";
+import type { TaskFull, TaskSeries } from "@/lib/domain/types";
+import { describeRule } from "@/lib/domain/recurrence";
 import { dueLabel, fmtDateLong, fmtDateMed, fmtMinAmPm, isISODate } from "@/lib/domain/time";
 import { accentStyle } from "@/lib/domain/hues";
 import { useNow } from "@/hooks/use-now";
 import { cn } from "@/lib/utils";
 import { Panel } from "@/components/ui/panel";
 import { Button } from "@/components/ui/button";
-import { HueBadge, Status } from "@/components/ui/badge";
+import { HueBadge, OkFlag, Status } from "@/components/ui/badge";
 import { Field, Input, Textarea, Checkbox } from "@/components/ui/field";
 import { useToast } from "@/components/ui/toast";
 import { useConfirm } from "@/components/ui/confirm";
@@ -66,6 +77,9 @@ export function TaskPanel({
   const [moveNote, setMoveNote] = useState("");
   const [cancelling, setCancelling] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
+  const [series, setSeries] = useState<
+    (TaskSeries & { total: number; upcomingOpen: number }) | null
+  >(null);
 
   // reset the inline forms whenever a different task opens
   useEffect(() => {
@@ -78,6 +92,20 @@ export function TaskPanel({
       setCancelReason("");
     }
   }, [task]);
+
+  // load the repeating-series details for the "Repeats" card, if any
+  const seriesId = task?.seriesId ?? null;
+  useEffect(() => {
+    setSeries(null);
+    if (seriesId === null) return;
+    let alive = true;
+    void describeTaskSeries(seriesId).then((res) => {
+      if (alive && res.ok) setSeries(res.data);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [seriesId]);
 
   if (!task) return null;
 
@@ -130,6 +158,33 @@ export function TaskPanel({
         toast.success("Task deleted");
         onClose();
       } else toast.error(res.error ?? "Couldn't delete the task.");
+    });
+  }
+
+  async function removeSeries() {
+    if (!series) return;
+    const yes = await confirm({
+      title: "Delete this repeating series?",
+      description:
+        series.upcomingOpen > 0
+          ? `${series.upcomingOpen} upcoming task${
+              series.upcomingOpen === 1 ? "" : "s"
+            } in this series will be removed. Past and done ones are kept.`
+          : "This removes the repeat rule. Past and done occurrences are kept.",
+      confirmLabel: "Delete series",
+      danger: true,
+    });
+    if (!yes) return;
+    start(async () => {
+      const res = await deleteTaskSeries(series.id);
+      if (res.ok) {
+        toast.success(
+          res.data.deleted > 0
+            ? `Removed ${res.data.deleted} upcoming task${res.data.deleted === 1 ? "" : "s"}`
+            : "Series deleted"
+        );
+        onClose();
+      } else toast.error(res.error ?? "Couldn't delete the series.");
     });
   }
 
@@ -208,6 +263,7 @@ export function TaskPanel({
           )}
           <Property label="Status">
             <Status status={task.status} />
+            {task.doneInClass && task.status !== "cancelled" && <OkFlag>done in class</OkFlag>}
           </Property>
         </dl>
 
@@ -226,6 +282,24 @@ export function TaskPanel({
                 {task.cancelReason ?? "No reason given."}
               </p>
             </div>
+          </div>
+        )}
+
+        {/* repeating series — this task is one occurrence of a pattern */}
+        {task.seriesId && (
+          <div className="flex items-center gap-2.5 rounded-[var(--r-card)] border border-line bg-surface/60 px-3 py-2.5 text-[12.5px]">
+            <Repeat className="size-4 shrink-0 text-muted" />
+            <span className="font-medium text-muted">Repeats</span>
+            {series ? (
+              <span className="truncate text-ink/90">{describeRule(series)}</span>
+            ) : (
+              <span className="text-faint">part of a series</span>
+            )}
+            {series && (
+              <span className="tnum ml-auto shrink-0 font-mono text-[11px] text-faint">
+                {series.total} total
+              </span>
+            )}
           </div>
         )}
 
@@ -370,6 +444,23 @@ export function TaskPanel({
                   <CalendarClock className="size-3.5" />
                   Move date
                 </Button>
+                {task.status !== "cancelled" && (
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    loading={pending}
+                    className={cn(task.doneInClass && "text-ok-text")}
+                    onClick={() =>
+                      act(
+                        () => setTaskDoneInClass(task.id, !task.doneInClass),
+                        task.doneInClass ? "No longer done in class" : "Marked done in class"
+                      )
+                    }
+                  >
+                    <GraduationCap className="size-3.5" />
+                    {task.doneInClass ? "Not done in class" : "Done in class"}
+                  </Button>
+                )}
                 {task.status === "tentative" && (
                   <Button
                     size="sm"
@@ -406,6 +497,12 @@ export function TaskPanel({
                   <Trash2 className="size-3.5" />
                   Delete
                 </Button>
+                {task.seriesId && (
+                  <Button size="sm" variant="danger" loading={pending} onClick={removeSeries}>
+                    <Repeat className="size-3.5" />
+                    Delete series
+                  </Button>
+                )}
               </div>
             )}
           </section>

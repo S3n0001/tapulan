@@ -59,6 +59,23 @@ CREATE TABLE IF NOT EXISTS task_types (
   sort  INTEGER NOT NULL DEFAULT 0
 );
 
+-- A repeating requirement (e.g. "weekly journal, every Friday"). The rule is
+-- expanded once into concrete task rows; this row only remembers the pattern
+-- so the whole series can be described and deleted as one.
+CREATE TABLE IF NOT EXISTS task_series (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  title      TEXT NOT NULL,
+  freq       TEXT NOT NULL CHECK (freq IN ('daily','weekly','monthly')),
+  interval   INTEGER NOT NULL DEFAULT 1,       -- every N weeks/months
+  weekdays   TEXT,                             -- weekly: CSV of 1-5 (Mon-Fri)
+  nth        INTEGER,                          -- monthly: 1-5 = nth, -1 = last
+  weekday    INTEGER,                          -- monthly: 1-5 (Mon-Fri)
+  start_date TEXT NOT NULL,                    -- YYYY-MM-DD
+  end_date   TEXT,                             -- inclusive; null when by count
+  count      INTEGER,                          -- occurrences; null when by end_date
+  created_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS tasks (
   id         INTEGER PRIMARY KEY AUTOINCREMENT,
   title      TEXT NOT NULL,
@@ -67,11 +84,17 @@ CREATE TABLE IF NOT EXISTS tasks (
   -- optional second class for a collab requirement (e.g. CPAR × PE); the task
   -- belongs to both. SET NULL so dropping that subject just ends the collab.
   secondary_subject_id INTEGER REFERENCES subjects(id) ON DELETE SET NULL,
+  -- the repeating series this occurrence came from, if any. SET NULL so
+  -- deleting a series can orphan (keep) past occurrences as standalone tasks.
+  series_id  INTEGER REFERENCES task_series(id) ON DELETE SET NULL,
   type_id    INTEGER NOT NULL REFERENCES task_types(id),
   due_date   TEXT NOT NULL,
   due_time   INTEGER,
   status     TEXT NOT NULL DEFAULT 'confirmed'
              CHECK (status IN ('confirmed','tentative','done','cancelled')),
+  -- section-wide "finished during class" marker (admin-set, 0/1). Distinct
+  -- from the per-device personal "done for me" and from status='done'.
+  done_in_class INTEGER NOT NULL DEFAULT 0,
   moved_from TEXT,
   cancel_reason TEXT,                          -- why it was called off (only when cancelled)
   note       TEXT,

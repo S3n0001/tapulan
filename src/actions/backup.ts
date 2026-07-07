@@ -17,12 +17,13 @@ function clearContent(db = getDb()): void {
   db.exec(`
     DELETE FROM task_links;
     DELETE FROM tasks;
+    DELETE FROM task_series;
     DELETE FROM task_types;
     DELETE FROM periods;
     DELETE FROM subjects;
     DELETE FROM teachers;
     DELETE FROM strands;
-    DELETE FROM sqlite_sequence WHERE name IN ('task_links','tasks','task_types','periods','subjects','teachers');
+    DELETE FROM sqlite_sequence WHERE name IN ('task_links','tasks','task_series','task_types','periods','subjects','teachers');
   `);
 }
 
@@ -43,6 +44,7 @@ interface Backup {
   subjects?: unknown[];
   periods?: unknown[];
   taskTypes?: unknown[];
+  taskSeries?: unknown[];
   tasks?: unknown[];
   taskLinks?: unknown[];
 }
@@ -141,9 +143,30 @@ export async function importBackup(json: string): Promise<ActionResult> {
         });
       }
 
+      const insertSeries = db.prepare(
+        `INSERT INTO task_series (id, title, freq, interval, weekdays, nth, weekday, start_date, end_date, count, created_at)
+         VALUES (@id, @title, @freq, @interval, @weekdays, @nth, @weekday, @start_date, @end_date, @count, @created_at)`
+      );
+      const seriesNow = new Date().toISOString();
+      for (const sr of rows<Record<string, unknown>>(data.taskSeries)) {
+        insertSeries.run({
+          id: Number(sr.id),
+          title: String(sr.title ?? ""),
+          freq: sr.freq === "daily" || sr.freq === "monthly" ? String(sr.freq) : "weekly",
+          interval: Number(sr.interval ?? 1) || 1,
+          weekdays: sr.weekdays != null ? String(sr.weekdays) : null,
+          nth: sr.nth != null ? Number(sr.nth) : null,
+          weekday: sr.weekday != null ? Number(sr.weekday) : null,
+          start_date: String(sr.start_date),
+          end_date: sr.end_date != null ? String(sr.end_date) : null,
+          count: sr.count != null ? Number(sr.count) : null,
+          created_at: String(sr.created_at ?? seriesNow),
+        });
+      }
+
       const insertTask = db.prepare(
-        `INSERT INTO tasks (id, title, details, subject_id, secondary_subject_id, type_id, due_date, due_time, status, moved_from, cancel_reason, note, points, created_at, updated_at)
-         VALUES (@id, @title, @details, @subject_id, @secondary_subject_id, @type_id, @due_date, @due_time, @status, @moved_from, @cancel_reason, @note, @points, @created_at, @updated_at)`
+        `INSERT INTO tasks (id, title, details, subject_id, secondary_subject_id, series_id, type_id, due_date, due_time, status, done_in_class, moved_from, cancel_reason, note, points, created_at, updated_at)
+         VALUES (@id, @title, @details, @subject_id, @secondary_subject_id, @series_id, @type_id, @due_date, @due_time, @status, @done_in_class, @moved_from, @cancel_reason, @note, @points, @created_at, @updated_at)`
       );
       const now = new Date().toISOString();
       for (const tk of rows<Record<string, unknown>>(data.tasks)) {
@@ -154,10 +177,12 @@ export async function importBackup(json: string): Promise<ActionResult> {
           subject_id: Number(tk.subject_id),
           secondary_subject_id:
             tk.secondary_subject_id != null ? Number(tk.secondary_subject_id) : null,
+          series_id: tk.series_id != null ? Number(tk.series_id) : null,
           type_id: Number(tk.type_id),
           due_date: String(tk.due_date),
           due_time: tk.due_time != null ? Number(tk.due_time) : null,
           status: String(tk.status ?? "confirmed"),
+          done_in_class: tk.done_in_class ? 1 : 0,
           moved_from: tk.moved_from != null ? String(tk.moved_from) : null,
           cancel_reason: tk.cancel_reason != null ? String(tk.cancel_reason) : null,
           note: tk.note != null ? String(tk.note) : null,

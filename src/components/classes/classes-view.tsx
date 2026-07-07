@@ -64,7 +64,7 @@ export function ClassesView({
   const openCounts = useMemo(() => {
     const map = new Map<number, number>();
     for (const t of tasks) {
-      if (t.status === "done" || t.status === "cancelled") continue;
+      if (t.status === "done" || t.status === "cancelled" || t.doneInClass) continue;
       // a collab requirement counts toward both of its classes
       for (const id of taskSubjectIds(t)) map.set(id, (map.get(id) ?? 0) + 1);
     }

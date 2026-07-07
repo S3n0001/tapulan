@@ -48,6 +48,7 @@ interface CreateBody {
   note?: unknown;
   points?: unknown;
   tentative?: unknown;
+  doneInClass?: unknown; // finished during class, section-wide
   links?: unknown; // [{ label?, url }]
 }
 
@@ -108,6 +109,7 @@ export async function POST(req: Request) {
     dueDate: typeof body.due === "string" ? body.due : "",
     dueTime: typeof body.time === "string" && body.time ? inputToMin(body.time) : null,
     status: body.tentative === true ? "tentative" : "confirmed",
+    doneInClass: body.doneInClass === true,
     movedFrom: null,
     cancelReason: null,
     note: typeof body.note === "string" && body.note.trim() ? body.note : null,

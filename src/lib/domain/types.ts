@@ -85,6 +85,25 @@ export interface TaskType {
   sort: number;
 }
 
+/** A repeating requirement's pattern; its occurrences are individual tasks. */
+export interface TaskSeries {
+  id: number;
+  title: string;
+  freq: "daily" | "weekly" | "monthly";
+  /** every N weeks/months */
+  interval: number;
+  /** weekly: which school days, 1 = Mon … 5 = Fri */
+  weekdays: number[];
+  /** monthly: 1..5 = nth weekday, -1 = last */
+  nth: number | null;
+  /** monthly: which weekday, 1 = Mon … 5 = Fri */
+  weekday: number | null;
+  startDate: string;
+  endDate: string | null;
+  count: number | null;
+  createdAt: string;
+}
+
 export type TaskStatus = "confirmed" | "tentative" | "done" | "cancelled";
 
 export const TASK_STATUSES: TaskStatus[] = [
@@ -101,12 +120,16 @@ export interface Task {
   subjectId: number;
   /** optional collab class — a second subject this task also belongs to */
   secondarySubjectId: number | null;
+  /** the repeating series this occurrence belongs to, if any */
+  seriesId: number | null;
   typeId: number;
   /** YYYY-MM-DD (local) */
   dueDate: string;
   /** minutes from midnight, null = end of day */
   dueTime: number | null;
   status: TaskStatus;
+  /** section-wide "finished during class" marker, admin-set (not personal) */
+  doneInClass: boolean;
   /** original YYYY-MM-DD when the date was moved */
   movedFrom: string | null;
   /** why it was called off — shown only when status is "cancelled" (optional) */

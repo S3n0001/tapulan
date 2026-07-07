@@ -1,15 +1,32 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
-import { FileText, Link2, Plus, Trash2, Upload } from "lucide-react";
-import { createTask, updateTask, type TaskInput, type TaskLinkInput } from "@/actions/tasks";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { FileText, Link2, Plus, Repeat, Trash2, Upload } from "lucide-react";
+import {
+  createTask,
+  createTaskSeries,
+  updateTask,
+  type TaskInput,
+  type TaskLinkInput,
+} from "@/actions/tasks";
 import type { SubjectFull, TaskFull, TaskStatus, TaskType } from "@/lib/domain/types";
 import { TASK_STATUSES } from "@/lib/domain/types";
-import { inputToMin, minToInput, toISODate } from "@/lib/domain/time";
+import { fmtDateMed, fromISODate, inputToMin, minToInput, toISODate } from "@/lib/domain/time";
+import {
+  describeRule,
+  expandRule,
+  isoWeekday,
+  MONTHLY_ORDINALS,
+  normalizeRule,
+  weekdayShort,
+  type RecurFreq,
+  type RecurrenceRule,
+} from "@/lib/domain/recurrence";
+import { cn } from "@/lib/utils";
 import { Panel } from "@/components/ui/panel";
 import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
-import { Field, Input, Select, Textarea } from "@/components/ui/field";
+import { Checkbox, Field, Input, Select, Textarea } from "@/components/ui/field";
 import { useToast } from "@/components/ui/toast";
 
 const STATUS_LABEL: Record<TaskStatus, string> = {
@@ -18,6 +35,9 @@ const STATUS_LABEL: Record<TaskStatus, string> = {
   done: "Done",
   cancelled: "Cancelled",
 };
+
+/** School weekdays for the weekly picker: Mon–Fri as ISO weekday numbers. */
+const WEEKDAYS = [1, 2, 3, 4, 5] as const;
 
 interface FormState {
   title: string;
@@ -28,14 +48,37 @@ interface FormState {
   dueDate: string;
   dueTime: string;
   status: TaskStatus;
+  doneInClass: boolean;
   points: string;
   note: string;
   cancelReason: string;
   movedFrom: string;
   links: TaskLinkInput[];
+  // recurrence (new tasks only)
+  repeat: "none" | RecurFreq;
+  repeatInterval: string;
+  repeatWeekdays: number[];
+  repeatNth: number;
+  repeatWeekday: number;
+  repeatEndMode: "until" | "count";
+  repeatUntil: string;
+  repeatCount: string;
 }
 
 function initial(task: TaskFull | null, subjects: SubjectFull[], types: TaskType[]): FormState {
+  const dueDate = task ? task.dueDate : toISODate(new Date());
+  const weekday = isoWeekday(fromISODate(dueDate));
+  const repeatDefaults = {
+    repeat: "none" as const,
+    repeatInterval: "1",
+    // seed the weekly picker with the due date's own weekday
+    repeatWeekdays: weekday >= 1 && weekday <= 5 ? [weekday] : [1],
+    repeatNth: 1,
+    repeatWeekday: weekday >= 1 && weekday <= 5 ? weekday : 1,
+    repeatEndMode: "count" as const,
+    repeatUntil: "",
+    repeatCount: "8",
+  };
   if (task) {
     return {
       title: task.title,
@@ -46,11 +89,13 @@ function initial(task: TaskFull | null, subjects: SubjectFull[], types: TaskType
       dueDate: task.dueDate,
       dueTime: minToInput(task.dueTime),
       status: task.status,
+      doneInClass: task.doneInClass,
       points: task.points !== null ? String(task.points) : "",
       note: task.note ?? "",
       cancelReason: task.cancelReason ?? "",
       movedFrom: task.movedFrom ?? "",
       links: task.links.map((l) => ({ label: l.label, url: l.url, kind: l.kind })),
+      ...repeatDefaults,
     };
   }
   return {
@@ -59,14 +104,30 @@ function initial(task: TaskFull | null, subjects: SubjectFull[], types: TaskType
     subjectId: subjects[0]?.id ?? "",
     secondarySubjectId: "",
     typeId: types[0]?.id ?? "",
-    dueDate: toISODate(new Date()),
+    dueDate,
     dueTime: "",
     status: "confirmed",
+    doneInClass: false,
     points: "",
     note: "",
     cancelReason: "",
     movedFrom: "",
     links: [],
+    ...repeatDefaults,
+  };
+}
+
+/** Build a recurrence rule from the form (start date = the task's due date). */
+function ruleFromForm(form: FormState): RecurrenceRule {
+  return {
+    freq: (form.repeat === "none" ? "weekly" : form.repeat) as RecurFreq,
+    interval: Number(form.repeatInterval) || 1,
+    weekdays: form.repeatWeekdays,
+    nth: form.repeat === "monthly" ? form.repeatNth : null,
+    weekday: form.repeat === "monthly" ? form.repeatWeekday : null,
+    startDate: form.dueDate,
+    endDate: form.repeatEndMode === "until" ? form.repeatUntil || null : null,
+    count: form.repeatEndMode === "count" ? Number(form.repeatCount) || null : null,
   };
 }
 
@@ -148,6 +209,7 @@ export function TaskEditor({
       dueDate: form.dueDate,
       dueTime: inputToMin(form.dueTime),
       status: form.status,
+      doneInClass: form.doneInClass,
       movedFrom: form.movedFrom || null,
       cancelReason: form.cancelReason || null,
       note: form.note || null,
@@ -155,7 +217,20 @@ export function TaskEditor({
       links: form.links,
     };
 
+    const repeating = !task && form.repeat !== "none";
+
     start(async () => {
+      if (repeating) {
+        const res = await createTaskSeries(input, ruleFromForm(form));
+        if (res.ok) {
+          toast.success(`Added ${res.data.count} repeating task${res.data.count === 1 ? "" : "s"}`);
+          onClose();
+        } else {
+          setError(res.error);
+          toast.error(res.error);
+        }
+        return;
+      }
       const res = task ? await updateTask(task.id, input) : await createTask(input);
       if (res.ok) {
         toast.success(task ? "Task updated" : "Task added");
@@ -166,6 +241,17 @@ export function TaskEditor({
       }
     });
   }
+
+  // live count/first/last for the repeat section (client-side, pure)
+  const preview = useMemo(() => {
+    if (task || form.repeat === "none") return null;
+    const norm = normalizeRule(ruleFromForm(form));
+    if (typeof norm === "string") return { error: norm };
+    const dates = expandRule(norm);
+    return dates.length === 0
+      ? { error: "This pattern produces no dates." }
+      : { count: dates.length, first: dates[0], last: dates[dates.length - 1], rule: norm };
+  }, [task, form]);
 
   return (
     <Panel
@@ -188,7 +274,11 @@ export function TaskEditor({
             Cancel
           </Button>
           <Button variant="primary" loading={pending} onClick={submit}>
-            {task ? "Save changes" : "Add task"}
+            {task
+              ? "Save changes"
+              : preview && !("error" in preview)
+                ? `Add ${preview.count} task${preview.count === 1 ? "" : "s"}`
+                : "Add task"}
           </Button>
         </>
       }
@@ -277,6 +367,174 @@ export function TaskEditor({
           </Field>
         </div>
 
+        {/* recurrence — only when creating; each occurrence becomes its own task */}
+        {!task && (
+          <div className="space-y-3 rounded-[var(--r-card)] border border-line bg-surface/40 p-3">
+            <Field
+              label={
+                <span className="flex items-center gap-1.5">
+                  <Repeat className="size-3.5 text-muted" />
+                  Repeat
+                </span>
+              }
+              hint={form.repeat === "none" ? "make this a recurring requirement" : undefined}
+              htmlFor="t-repeat"
+            >
+              <Select
+                id="t-repeat"
+                value={form.repeat}
+                onChange={(e) => set("repeat", e.target.value as FormState["repeat"])}
+              >
+                <option value="none">Does not repeat</option>
+                <option value="daily">Every school day</option>
+                <option value="weekly">Weekly</option>
+                <option value="monthly">Monthly</option>
+              </Select>
+            </Field>
+
+            {form.repeat === "weekly" && (
+              <div className="anim-fade space-y-3">
+                <div className="space-y-1.5">
+                  <span className="text-[12px] font-medium text-muted">On these days</span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {WEEKDAYS.map((wd) => {
+                      const on = form.repeatWeekdays.includes(wd);
+                      return (
+                        <button
+                          key={wd}
+                          type="button"
+                          aria-pressed={on}
+                          onClick={() =>
+                            set(
+                              "repeatWeekdays",
+                              on
+                                ? form.repeatWeekdays.filter((d) => d !== wd)
+                                : [...form.repeatWeekdays, wd]
+                            )
+                          }
+                          className={cn(
+                            "tap h-7 w-11 rounded-[var(--r-chip)] border text-[12px] font-medium",
+                            on
+                              ? "border-transparent bg-[color-mix(in_oklab,var(--brand)_16%,var(--bg))] text-brand-text"
+                              : "border-line bg-surface text-muted hover:border-line-strong hover:text-ink"
+                          )}
+                        >
+                          {weekdayShort(wd)}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+                <Field label="Every" hint="weeks" htmlFor="t-repeat-interval">
+                  <Input
+                    id="t-repeat-interval"
+                    type="number"
+                    min={1}
+                    inputMode="numeric"
+                    value={form.repeatInterval}
+                    onChange={(e) => set("repeatInterval", e.target.value)}
+                  />
+                </Field>
+              </div>
+            )}
+
+            {form.repeat === "monthly" && (
+              <div className="anim-fade space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <Field label="Week" htmlFor="t-repeat-nth">
+                    <Select
+                      id="t-repeat-nth"
+                      value={form.repeatNth}
+                      onChange={(e) => set("repeatNth", Number(e.target.value))}
+                    >
+                      {MONTHLY_ORDINALS.map((o) => (
+                        <option key={o.value} value={o.value}>
+                          {o.label}
+                        </option>
+                      ))}
+                    </Select>
+                  </Field>
+                  <Field label="Weekday" htmlFor="t-repeat-weekday">
+                    <Select
+                      id="t-repeat-weekday"
+                      value={form.repeatWeekday}
+                      onChange={(e) => set("repeatWeekday", Number(e.target.value))}
+                    >
+                      {WEEKDAYS.map((wd) => (
+                        <option key={wd} value={wd}>
+                          {weekdayShort(wd)}
+                        </option>
+                      ))}
+                    </Select>
+                  </Field>
+                </div>
+                <Field label="Every" hint="months" htmlFor="t-repeat-interval">
+                  <Input
+                    id="t-repeat-interval"
+                    type="number"
+                    min={1}
+                    inputMode="numeric"
+                    value={form.repeatInterval}
+                    onChange={(e) => set("repeatInterval", e.target.value)}
+                  />
+                </Field>
+              </div>
+            )}
+
+            {form.repeat !== "none" && (
+              <div className="anim-fade space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <Field label="Ends" htmlFor="t-repeat-end">
+                    <Select
+                      id="t-repeat-end"
+                      value={form.repeatEndMode}
+                      onChange={(e) =>
+                        set("repeatEndMode", e.target.value as FormState["repeatEndMode"])
+                      }
+                    >
+                      <option value="count">After a number of times</option>
+                      <option value="until">On a date</option>
+                    </Select>
+                  </Field>
+                  {form.repeatEndMode === "count" ? (
+                    <Field label="Times" htmlFor="t-repeat-count">
+                      <Input
+                        id="t-repeat-count"
+                        type="number"
+                        min={1}
+                        inputMode="numeric"
+                        value={form.repeatCount}
+                        onChange={(e) => set("repeatCount", e.target.value)}
+                      />
+                    </Field>
+                  ) : (
+                    <Field label="Until" htmlFor="t-repeat-until">
+                      <Input
+                        id="t-repeat-until"
+                        type="date"
+                        min={form.dueDate}
+                        value={form.repeatUntil}
+                        onChange={(e) => set("repeatUntil", e.target.value)}
+                      />
+                    </Field>
+                  )}
+                </div>
+                {preview &&
+                  ("error" in preview ? (
+                    <p className="text-[12px] text-danger-text">{preview.error}</p>
+                  ) : (
+                    <p className="text-[12px] text-muted">
+                      <span className="font-medium text-ink">{describeRule(preview.rule)}</span> ·{" "}
+                      <span className="tnum">{preview.count}</span> task
+                      {preview.count === 1 ? "" : "s"} · {fmtDateMed(preview.first)}
+                      {preview.count > 1 && <> → {fmtDateMed(preview.last)}</>}
+                    </p>
+                  ))}
+              </div>
+            )}
+          </div>
+        )}
+
         <div className="grid grid-cols-2 gap-3">
           <Field label="Status" htmlFor="t-status">
             <Select
@@ -303,6 +561,19 @@ export function TaskEditor({
             />
           </Field>
         </div>
+
+        {form.repeat === "none" && form.status !== "cancelled" && (
+          <Checkbox
+            checked={form.doneInClass}
+            onChange={(v) => set("doneInClass", v)}
+            label={
+              <span>
+                Done in class
+                <span className="text-faint"> · finished during class, for the whole section</span>
+              </span>
+            }
+          />
+        )}
 
         {form.status === "cancelled" && (
           <Field

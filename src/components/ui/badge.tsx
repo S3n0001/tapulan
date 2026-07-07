@@ -63,6 +63,15 @@ export function WarnFlag({ children }: { children: ReactNode }) {
   );
 }
 
+/** Positive marker for completed states like done-in-class. */
+export function OkFlag({ children }: { children: ReactNode }) {
+  return (
+    <span className="inline-flex h-[17px] shrink-0 items-center rounded-[4px] bg-[color-mix(in_oklab,var(--ok)_16%,var(--bg))] px-1 font-mono text-[10px] font-semibold uppercase tracking-[0.03em] text-ok-text">
+      {children}
+    </span>
+  );
+}
+
 /** Muted marker for terminal states like cancelled — neutral, never alarming. */
 export function MutedFlag({ children }: { children: ReactNode }) {
   return (

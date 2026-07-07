@@ -67,9 +67,9 @@ export function groupByBucket(tasks: TaskFull[], now: Date): TaskGroup[] {
   }));
 }
 
-/** Still-actionable — not done for the section and not cancelled. */
+/** Still-actionable — not done for the section (incl. in class) and not cancelled. */
 export function isActionable(t: TaskFull): boolean {
-  return t.status !== "cancelled" && t.status !== "done";
+  return t.status !== "cancelled" && t.status !== "done" && !t.doneInClass;
 }
 
 /**

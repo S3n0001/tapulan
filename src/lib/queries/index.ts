@@ -13,6 +13,7 @@ import type {
   Task,
   TaskFull,
   TaskLink,
+  TaskSeries,
   TaskType,
   Teacher,
 } from "@/lib/domain/types";
@@ -62,10 +63,12 @@ interface TaskRow {
   details: string;
   subject_id: number;
   secondary_subject_id: number | null;
+  series_id: number | null;
   type_id: number;
   due_date: string;
   due_time: number | null;
   status: Task["status"];
+  done_in_class: number;
   moved_from: string | null;
   cancel_reason: string | null;
   note: string | null;
@@ -117,10 +120,12 @@ function mapTask(row: TaskRow): Task {
     details: row.details,
     subjectId: row.subject_id,
     secondarySubjectId: row.secondary_subject_id,
+    seriesId: row.series_id,
     typeId: row.type_id,
     dueDate: row.due_date,
     dueTime: row.due_time,
     status: row.status,
+    doneInClass: !!row.done_in_class,
     movedFrom: row.moved_from,
     cancelReason: row.cancel_reason,
     note: row.note,
@@ -241,6 +246,66 @@ export function getTaskTypes(): TaskType[] {
   return getDb().prepare("SELECT * FROM task_types ORDER BY sort, id").all() as TaskType[];
 }
 
+interface TaskSeriesRow {
+  id: number;
+  title: string;
+  freq: TaskSeries["freq"];
+  interval: number;
+  weekdays: string | null;
+  nth: number | null;
+  weekday: number | null;
+  start_date: string;
+  end_date: string | null;
+  count: number | null;
+  created_at: string;
+}
+
+function mapSeries(row: TaskSeriesRow): TaskSeries {
+  return {
+    id: row.id,
+    title: row.title,
+    freq: row.freq,
+    interval: row.interval,
+    weekdays: row.weekdays
+      ? row.weekdays.split(",").map(Number).filter((n) => n >= 1 && n <= 5)
+      : [],
+    nth: row.nth,
+    weekday: row.weekday,
+    startDate: row.start_date,
+    endDate: row.end_date,
+    count: row.count,
+    createdAt: row.created_at,
+  };
+}
+
+/**
+ * A repeating series with how many of its occurrences exist, and how many are
+ * still upcoming-and-open (what a "delete series" would remove). null when the
+ * series is gone. For the task panel's series card.
+ */
+export function getTaskSeries(
+  id: number,
+  todayISO: string
+): (TaskSeries & { total: number; upcomingOpen: number }) | null {
+  const db = getDb();
+  const row = db.prepare("SELECT * FROM task_series WHERE id = ?").get(id) as
+    | TaskSeriesRow
+    | undefined;
+  if (!row) return null;
+  const total = (db.prepare("SELECT COUNT(*) AS n FROM tasks WHERE series_id = ?").get(id) as {
+    n: number;
+  }).n;
+  const upcomingOpen = (
+    db
+      .prepare(
+        `SELECT COUNT(*) AS n FROM tasks
+         WHERE series_id = ? AND due_date >= ? AND status IN ('confirmed','tentative')`
+      )
+      .get(id, todayISO) as { n: number }
+  ).n;
+  return { ...mapSeries(row), total, upcomingOpen };
+}
+
 /** Tasks with subject + type resolved. `strand` filters to visible ones. */
 export function getTasks(strand?: StrandCode | null): TaskFull[] {
   const db = getDb();
@@ -303,13 +368,15 @@ export function getOpenTaskCount(strand?: StrandCode | null): number {
             `SELECT COUNT(*) AS n FROM tasks t
              JOIN subjects s ON s.id = t.subject_id
              LEFT JOIN subjects s2 ON s2.id = t.secondary_subject_id
-             WHERE t.status IN ('confirmed','tentative')
+             WHERE t.status IN ('confirmed','tentative') AND t.done_in_class = 0
                AND ((s.strand IS NULL OR s.strand = ?)
                  OR (t.secondary_subject_id IS NOT NULL AND (s2.strand IS NULL OR s2.strand = ?)))`
           )
           .get(strand, strand)
       : db
-          .prepare("SELECT COUNT(*) AS n FROM tasks WHERE status IN ('confirmed','tentative')")
+          .prepare(
+            "SELECT COUNT(*) AS n FROM tasks WHERE status IN ('confirmed','tentative') AND done_in_class = 0"
+          )
           .get()
   ) as { n: number };
   return row.n;
@@ -337,6 +404,7 @@ export function exportAll() {
     periods: db.prepare("SELECT * FROM periods").all(),
     dayMarks: db.prepare("SELECT * FROM day_marks").all(),
     taskTypes: db.prepare("SELECT * FROM task_types").all(),
+    taskSeries: db.prepare("SELECT * FROM task_series").all(),
     tasks: db.prepare("SELECT * FROM tasks").all(),
     taskLinks: db.prepare("SELECT * FROM task_links").all(),
   };

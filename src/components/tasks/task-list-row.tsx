@@ -1,11 +1,11 @@
 "use client";
 
-import { Paperclip } from "lucide-react";
+import { Paperclip, Repeat } from "lucide-react";
 import type { TaskFull } from "@/lib/domain/types";
 import { dueLabel, dueTone, type DueTone } from "@/lib/domain/time";
 import { accentStyle } from "@/lib/domain/hues";
 import { cn } from "@/lib/utils";
-import { HueBadge, MutedFlag, WarnFlag } from "@/components/ui/badge";
+import { HueBadge, MutedFlag, OkFlag, WarnFlag } from "@/components/ui/badge";
 import { DoneCheck } from "./done-check";
 
 const TONE_TEXT: Record<DueTone, string> = {
@@ -37,7 +37,7 @@ export function TaskListRow({
   showSubject?: boolean;
 }) {
   const cancelled = task.status === "cancelled";
-  const complete = done || task.status === "done";
+  const complete = done || task.status === "done" || task.doneInClass;
   const tone: DueTone = complete || cancelled ? "normal" : dueTone(task.dueDate, now, task.dueTime);
 
   return (
@@ -77,12 +77,16 @@ export function TaskListRow({
           {task.links.length > 0 && (
             <Paperclip className="size-3 shrink-0 text-faint" aria-label="Has materials" />
           )}
+          {task.seriesId !== null && (
+            <Repeat className="size-3 shrink-0 text-faint" aria-label="Repeating task" />
+          )}
           {cancelled ? (
             <span title={task.cancelReason ?? undefined}>
               <MutedFlag>cancelled</MutedFlag>
             </span>
           ) : (
             <>
+              {task.doneInClass && <OkFlag>in class</OkFlag>}
               {task.movedFrom && <WarnFlag>moved</WarnFlag>}
               {task.status === "tentative" && <WarnFlag>unconfirmed</WarnFlag>}
             </>

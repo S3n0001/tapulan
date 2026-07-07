@@ -1,6 +1,7 @@
 import "server-only";
 import { getDb } from "@/lib/db";
 import { isISODate } from "@/lib/domain/time";
+import { expandRule, normalizeRule, type RecurrenceRule } from "@/lib/domain/recurrence";
 import { TASK_STATUSES, type TaskStatus } from "@/lib/domain/types";
 
 /**
@@ -25,6 +26,8 @@ export interface TaskInput {
   dueDate: string;
   dueTime: number | null;
   status: TaskStatus;
+  /** section-wide "finished during class" marker (admin-set) */
+  doneInClass: boolean;
   movedFrom: string | null;
   /** why it was called off — only kept when status is "cancelled" */
   cancelReason: string | null;
@@ -129,6 +132,7 @@ export function normalizeTaskInput(input: TaskInput): TaskInput | string {
     dueDate: input.dueDate,
     dueTime,
     status: input.status,
+    doneInClass: !!input.doneInClass,
     movedFrom: input.movedFrom,
     cancelReason,
     note: input.note?.trim() ? input.note.trim() : null,
@@ -145,10 +149,10 @@ export function insertTask(clean: TaskInput): { id: number } {
   return db.transaction(() => {
     const info = db
       .prepare(
-        `INSERT INTO tasks (title, details, subject_id, secondary_subject_id, type_id, due_date, due_time, status, moved_from, cancel_reason, note, points, created_at, updated_at)
-         VALUES (@title, @details, @subjectId, @secondarySubjectId, @typeId, @dueDate, @dueTime, @status, @movedFrom, @cancelReason, @note, @points, @now, @now)`
+        `INSERT INTO tasks (title, details, subject_id, secondary_subject_id, type_id, due_date, due_time, status, done_in_class, moved_from, cancel_reason, note, points, created_at, updated_at)
+         VALUES (@title, @details, @subjectId, @secondarySubjectId, @typeId, @dueDate, @dueTime, @status, @doneInClass, @movedFrom, @cancelReason, @note, @points, @now, @now)`
       )
-      .run({ ...task, now });
+      .run({ ...task, doneInClass: task.doneInClass ? 1 : 0, now });
     const id = Number(info.lastInsertRowid);
     replaceLinks(id, links);
     return { id };
@@ -164,10 +168,10 @@ export function updateTaskRow(id: number, clean: TaskInput): void {
       `UPDATE tasks SET
          title=@title, details=@details, subject_id=@subjectId,
          secondary_subject_id=@secondarySubjectId, type_id=@typeId,
-         due_date=@dueDate, due_time=@dueTime, status=@status, moved_from=@movedFrom,
-         cancel_reason=@cancelReason, note=@note, points=@points, updated_at=@now
+         due_date=@dueDate, due_time=@dueTime, status=@status, done_in_class=@doneInClass,
+         moved_from=@movedFrom, cancel_reason=@cancelReason, note=@note, points=@points, updated_at=@now
        WHERE id=@id`
-    ).run({ ...task, id, now: new Date().toISOString() });
+    ).run({ ...task, id, doneInClass: task.doneInClass ? 1 : 0, now: new Date().toISOString() });
     replaceLinks(id, links);
   })();
 }
@@ -215,6 +219,101 @@ export function setTaskStatusRow(id: number, status: TaskStatus, reason: string 
   if (info.changes === 0) throw new Error("That task no longer exists.");
 }
 
+/** Toggle the section-wide "done in class" marker on one task. */
+export function setTaskDoneInClassRow(id: number, value: boolean): void {
+  const info = getDb()
+    .prepare("UPDATE tasks SET done_in_class = ?, updated_at = ? WHERE id = ?")
+    .run(value ? 1 : 0, new Date().toISOString(), id);
+  if (info.changes === 0) throw new Error("That task no longer exists.");
+}
+
 export function deleteTaskRow(id: number): void {
   getDb().prepare("DELETE FROM tasks WHERE id = ?").run(id);
+}
+
+// ------------------------------------------------------------- recurring
+
+/**
+ * Create a repeating series: persist the pattern, then materialize every
+ * occurrence as its own task row (sharing the base's subject/type/links, each
+ * with its own due date). The base input's `dueDate` is the series start.
+ * Returns the new series id and how many occurrences were created.
+ */
+export function insertTaskSeries(
+  base: TaskInput,
+  rawRule: RecurrenceRule
+): { seriesId: number; count: number } {
+  // the series always starts on the base task's due date — keep them in lockstep
+  const rule = normalizeRule({ ...rawRule, startDate: base.dueDate });
+  if (typeof rule === "string") throw new Error(rule);
+  const dates = expandRule(rule);
+  if (dates.length === 0) throw new Error("That repeat pattern produces no dates.");
+
+  const db = getDb();
+  const now = new Date().toISOString();
+  const { links } = base;
+
+  return db.transaction(() => {
+    const seriesInfo = db
+      .prepare(
+        `INSERT INTO task_series (title, freq, interval, weekdays, nth, weekday, start_date, end_date, count, created_at)
+         VALUES (@title, @freq, @interval, @weekdays, @nth, @weekday, @startDate, @endDate, @count, @now)`
+      )
+      .run({
+        title: base.title,
+        freq: rule.freq,
+        interval: rule.interval,
+        weekdays: rule.weekdays.length ? rule.weekdays.join(",") : null,
+        nth: rule.nth,
+        weekday: rule.weekday,
+        startDate: rule.startDate,
+        endDate: rule.endDate,
+        count: rule.count,
+        now,
+      });
+    const seriesId = Number(seriesInfo.lastInsertRowid);
+
+    const insert = db.prepare(
+      `INSERT INTO tasks (title, details, subject_id, secondary_subject_id, series_id, type_id, due_date, due_time, status, moved_from, cancel_reason, note, points, created_at, updated_at)
+       VALUES (@title, @details, @subjectId, @secondarySubjectId, @seriesId, @typeId, @dueDate, @dueTime, @status, NULL, NULL, @note, @points, @now, @now)`
+    );
+    for (const dueDate of dates) {
+      const info = insert.run({
+        title: base.title,
+        details: base.details,
+        subjectId: base.subjectId,
+        secondarySubjectId: base.secondarySubjectId,
+        seriesId,
+        typeId: base.typeId,
+        dueDate,
+        dueTime: base.dueTime,
+        status: base.status,
+        note: base.note,
+        points: base.points,
+        now,
+      });
+      if (links.length) replaceLinks(Number(info.lastInsertRowid), links);
+    }
+    return { seriesId, count: dates.length };
+  })();
+}
+
+/**
+ * Delete a series. Upcoming, still-open occurrences are removed with it;
+ * past or already-done ones are kept (their `series_id` cleared) so graded
+ * history survives. Returns how many occurrences were deleted.
+ */
+export function deleteTaskSeriesRow(id: number, todayISO: string): { deleted: number } {
+  const db = getDb();
+  return db.transaction(() => {
+    const info = db
+      .prepare(
+        `DELETE FROM tasks
+         WHERE series_id = ? AND due_date >= ? AND status IN ('confirmed','tentative')`
+      )
+      .run(id, todayISO);
+    db.prepare("UPDATE tasks SET series_id = NULL WHERE series_id = ?").run(id);
+    db.prepare("DELETE FROM task_series WHERE id = ?").run(id);
+    return { deleted: info.changes };
+  })();
 }

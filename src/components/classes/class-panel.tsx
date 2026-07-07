@@ -56,7 +56,9 @@ export function ClassPanel({
   const { subject: shown, meetings: shownMeetings, tasks: shownTasks } = view;
 
   const weeklyMinutes = shownMeetings.reduce((sum, m) => sum + (m.end - m.start), 0);
-  const openTasks = shownTasks.filter((t) => t.status !== "done" && t.status !== "cancelled");
+  const openTasks = shownTasks.filter(
+    (t) => t.status !== "done" && t.status !== "cancelled" && !t.doneInClass
+  );
 
   return (
     <Panel

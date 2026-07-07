@@ -32,6 +32,14 @@ function migrate(db: Database): void {
       "ALTER TABLE tasks ADD COLUMN secondary_subject_id INTEGER REFERENCES subjects(id) ON DELETE SET NULL"
     );
   }
+  if (!cols.some((c) => c.name === "series_id")) {
+    db.exec(
+      "ALTER TABLE tasks ADD COLUMN series_id INTEGER REFERENCES task_series(id) ON DELETE SET NULL"
+    );
+  }
+  if (!cols.some((c) => c.name === "done_in_class")) {
+    db.exec("ALTER TABLE tasks ADD COLUMN done_in_class INTEGER NOT NULL DEFAULT 0");
+  }
 }
 
 function open(): Database {

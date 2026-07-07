@@ -68,7 +68,7 @@ export function TasksView({
     return tasks.filter((t) => {
       if (typeFilter !== "all" && t.typeId !== typeFilter) return false;
       if (!showDone) {
-        if (t.status === "cancelled" || t.status === "done") return false;
+        if (t.status === "cancelled" || t.status === "done" || t.doneInClass) return false;
         if (isDone(t.id)) return false;
       }
       return true;
@@ -80,7 +80,7 @@ export function TasksView({
   const typeCounts = useMemo(() => {
     const counts = new Map<number, number>();
     for (const t of tasks) {
-      if (t.status === "cancelled" || t.status === "done") continue;
+      if (t.status === "cancelled" || t.status === "done" || t.doneInClass) continue;
       counts.set(t.typeId, (counts.get(t.typeId) ?? 0) + 1);
     }
     return counts;
@@ -88,7 +88,10 @@ export function TasksView({
 
   const selected = selectedId !== null ? (tasks.find((t) => t.id === selectedId) ?? null) : null;
   const openCount = useMemo(
-    () => tasks.filter((t) => t.status === "confirmed" || t.status === "tentative").length,
+    () =>
+      tasks.filter(
+        (t) => (t.status === "confirmed" || t.status === "tentative") && !t.doneInClass
+      ).length,
     [tasks]
   );
 

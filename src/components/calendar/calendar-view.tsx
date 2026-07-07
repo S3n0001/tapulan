@@ -66,7 +66,7 @@ interface MonthDay {
 
 /** Settled one way or another — struck out and receded, never alarming. */
 function isHandled(t: TaskFull, personalDone: boolean): boolean {
-  return personalDone || t.status === "done" || t.status === "cancelled";
+  return personalDone || t.doneInClass || t.status === "done" || t.status === "cancelled";
 }
 
 /** Open work first (in due-time order), handled work sinks to the bottom. */

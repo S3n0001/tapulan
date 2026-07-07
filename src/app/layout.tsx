@@ -58,7 +58,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
 
   // light rows for the ⌘K palette — id + display fields only
   const paletteTasks = tasks
-    .filter((t) => t.status !== "done" && t.status !== "cancelled")
+    .filter((t) => t.status !== "done" && t.status !== "cancelled" && !t.doneInClass)
     .map((t) => ({
       id: t.id,
       title: t.title,
