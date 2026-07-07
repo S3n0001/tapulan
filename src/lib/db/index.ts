@@ -27,6 +27,11 @@ function migrate(db: Database): void {
   if (!cols.some((c) => c.name === "cancel_reason")) {
     db.exec("ALTER TABLE tasks ADD COLUMN cancel_reason TEXT");
   }
+  if (!cols.some((c) => c.name === "secondary_subject_id")) {
+    db.exec(
+      "ALTER TABLE tasks ADD COLUMN secondary_subject_id INTEGER REFERENCES subjects(id) ON DELETE SET NULL"
+    );
+  }
 }
 
 function open(): Database {

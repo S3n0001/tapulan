@@ -24,10 +24,11 @@ export default async function WeekPage({
   const todayISO = toISODate(now);
   const marks = getDayMarkMap(toISODate(monday), toISODate(addDays(monday, 4)));
 
-  // count still-open requirements due on each weekday — the header chips
+  // still-open requirements: the header chips count them per day, and the view
+  // pins each one onto the class block it belongs to (its subject × due date)
+  const openTasks = getTasks(strand).filter(isActionable);
   const dueByDay = new Map<string, number>();
-  for (const t of getTasks(strand)) {
-    if (!isActionable(t)) continue;
+  for (const t of openTasks) {
     dueByDay.set(t.dueDate, (dueByDay.get(t.dueDate) ?? 0) + 1);
   }
 
@@ -51,6 +52,7 @@ export default async function WeekPage({
     <WeekView
       periods={getPeriods(strand)}
       days={days}
+      tasks={openTasks}
       weekOffset={offset}
       nowISO={now.toISOString()}
       showStrand={strand === null}

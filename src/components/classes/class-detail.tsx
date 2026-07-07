@@ -8,12 +8,13 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import type {
-  PeriodFull,
-  Strand,
-  SubjectFull,
-  TaskFull,
-  Teacher,
+import {
+  taskSubjectIds,
+  type PeriodFull,
+  type Strand,
+  type SubjectFull,
+  type TaskFull,
+  type Teacher,
 } from "@/lib/domain/types";
 import { useIsAdmin } from "@/components/shell/admin-context";
 import { SubjectEditor } from "@/components/admin/subject-editor";
@@ -87,7 +88,7 @@ export function ClassDetailProvider({
       <ClassPanel
         subject={selected}
         meetings={selected ? (meetingsBySubject.get(selected.id) ?? []) : []}
-        tasks={selected ? tasks.filter((t) => t.subjectId === selected.id) : []}
+        tasks={selected ? tasks.filter((t) => taskSubjectIds(t).includes(selected.id)) : []}
         open={selected !== null}
         onClose={() => setOpenId(null)}
         onEdit={isAdmin ? (s) => { setOpenId(null); setEditing(s); } : undefined}

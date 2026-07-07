@@ -8,7 +8,7 @@ import { AdminProvider } from "./admin-context";
 
 export function Providers({ isAdmin, children }: { isAdmin: boolean; children: ReactNode }) {
   return (
-    <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false} disableTransitionOnChange>
+    <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false} disableTransitionOnChange>
       <ToastProvider>
         <ConfirmProvider>
           <AdminProvider value={isAdmin}>{children}</AdminProvider>

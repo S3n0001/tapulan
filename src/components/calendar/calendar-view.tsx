@@ -587,7 +587,7 @@ function TaskChip({
 }) {
   const late = !handled && isPastDue(t.dueDate, t.dueTime, now);
   const tip =
-    `${t.type.short} · ${t.subject.short} — ${t.title}` +
+    `${t.type.short} · ${t.subject.short}${t.secondarySubject ? `+${t.secondarySubject.short}` : ""} — ${t.title}` +
     (t.dueTime !== null ? ` · ${fmtMinAmPm(t.dueTime)}` : "") +
     (t.status === "cancelled"
       ? " · cancelled"

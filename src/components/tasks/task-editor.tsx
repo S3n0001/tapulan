@@ -23,6 +23,7 @@ interface FormState {
   title: string;
   details: string;
   subjectId: number | "";
+  secondarySubjectId: number | "";
   typeId: number | "";
   dueDate: string;
   dueTime: string;
@@ -40,6 +41,7 @@ function initial(task: TaskFull | null, subjects: SubjectFull[], types: TaskType
       title: task.title,
       details: task.details,
       subjectId: task.subjectId,
+      secondarySubjectId: task.secondarySubjectId ?? "",
       typeId: task.typeId,
       dueDate: task.dueDate,
       dueTime: minToInput(task.dueTime),
@@ -55,6 +57,7 @@ function initial(task: TaskFull | null, subjects: SubjectFull[], types: TaskType
     title: "",
     details: "",
     subjectId: subjects[0]?.id ?? "",
+    secondarySubjectId: "",
     typeId: types[0]?.id ?? "",
     dueDate: toISODate(new Date()),
     dueTime: "",
@@ -131,6 +134,8 @@ export function TaskEditor({
   function submit() {
     if (!form.title.trim()) return setError("Give the task a title.");
     if (form.subjectId === "" || form.typeId === "") return setError("Pick a subject and type.");
+    if (form.secondarySubjectId !== "" && form.secondarySubjectId === form.subjectId)
+      return setError("The collab class has to be a different subject.");
     if (!form.dueDate) return setError("Pick a due date.");
     setError(null);
 
@@ -138,6 +143,7 @@ export function TaskEditor({
       title: form.title,
       details: form.details,
       subjectId: Number(form.subjectId),
+      secondarySubjectId: form.secondarySubjectId === "" ? null : Number(form.secondarySubjectId),
       typeId: Number(form.typeId),
       dueDate: form.dueDate,
       dueTime: inputToMin(form.dueTime),
@@ -168,7 +174,13 @@ export function TaskEditor({
       onCmdEnter={submit}
       wide
       title={task ? "Edit task" : "New task"}
-      description={task ? task.subject.name : "A new requirement for the whole section"}
+      description={
+        task
+          ? task.secondarySubject
+            ? `${task.subject.name} × ${task.secondarySubject.name}`
+            : task.subject.name
+          : "A new requirement for the whole section"
+      }
       footer={
         <>
           {error && <p className="mr-auto text-[12px] text-danger-text">{error}</p>}
@@ -221,6 +233,30 @@ export function TaskEditor({
             </Select>
           </Field>
         </div>
+
+        <Field
+          label="Collab class"
+          hint="optional — a second subject sharing this task (e.g. CPAR × PE)"
+          htmlFor="t-collab"
+        >
+          <Select
+            id="t-collab"
+            value={form.secondarySubjectId}
+            onChange={(e) =>
+              set("secondarySubjectId", e.target.value === "" ? "" : Number(e.target.value))
+            }
+          >
+            <option value="">No collab — single class</option>
+            {subjects
+              .filter((s) => s.id !== form.subjectId)
+              .map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.short} — {s.name}
+                  {s.strand ? ` (${s.strand})` : ""}
+                </option>
+              ))}
+          </Select>
+        </Field>
 
         <div className="grid grid-cols-2 gap-3">
           <Field label="Due date" required htmlFor="t-date">

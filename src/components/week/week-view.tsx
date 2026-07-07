@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
-import type { DayMark, PeriodFull } from "@/lib/domain/types";
+import { taskSubjectIds, type DayMark, type PeriodFull, type TaskFull } from "@/lib/domain/types";
 import { minutesOf, fmtMin } from "@/lib/domain/time";
 import { accentStyle } from "@/lib/domain/hues";
 import { DAY_MARK_HUE, DAY_MARK_SHORT, dayMarkTitle } from "@/lib/domain/day-mark";
@@ -11,7 +11,11 @@ import { useNow } from "@/hooks/use-now";
 import { cn } from "@/lib/utils";
 import { Toolbar } from "@/components/shell/toolbar";
 import { EmptyState } from "@/components/ui/empty";
+import { DueFlag } from "@/components/tasks/due-flag";
 import { useClassDetail } from "@/components/classes/class-detail";
+
+/** Key a task onto the class meeting it belongs to: `dueDate#subjectId`. */
+const dueKey = (iso: string, subjectId: number) => `${iso}#${subjectId}`;
 
 /**
  * The week canvas: a true time-proportional grid. Five columns on desktop,
@@ -93,12 +97,15 @@ function layoutColumns(periods: PeriodFull[]): Placed[] {
 export function WeekView({
   periods,
   days,
+  tasks,
   weekOffset,
   nowISO,
   showStrand,
 }: {
   periods: PeriodFull[];
   days: WeekDay[];
+  /** still-open requirements across the strand — pinned onto their class block */
+  tasks: TaskFull[];
   /** 0 = this week, ±n = weeks away (the ?w= param) */
   weekOffset: number;
   nowISO: string;
@@ -106,6 +113,20 @@ export function WeekView({
 }) {
   const now = useNow(nowISO, 60_000);
   const nowMin = minutesOf(now);
+
+  // tasks pinned to the meeting they belong to — keyed by due date × subject,
+  // so a block on that date for that subject can surface its own requirements
+  const tasksByKey = useMemo(() => {
+    const map = new Map<string, TaskFull[]>();
+    for (const t of tasks) {
+      // a collab requirement pins onto both of its class meetings
+      for (const id of taskSubjectIds(t)) {
+        const key = dueKey(t.dueDate, id);
+        (map.get(key) ?? map.set(key, []).get(key)!).push(t);
+      }
+    }
+    return map;
+  }, [tasks]);
 
   const todayDay = days.find((d) => d.isToday)?.day ?? null;
   const [mobileDay, setMobileDay] = useState<number>(todayDay ?? 1);
@@ -345,6 +366,8 @@ export function WeekView({
                 nowMin={nowMin}
                 showStrand={showStrand}
                 mark={d.mark}
+                iso={d.iso}
+                tasksByKey={tasksByKey}
               />
             ))}
           </div>
@@ -398,6 +421,8 @@ export function WeekView({
             nowMin={nowMin}
             showStrand={showStrand}
             mark={mobileMark}
+            iso={days.find((d) => d.day === mobileDay)?.iso ?? ""}
+            tasksByKey={tasksByKey}
             mobile
           />
         </div>
@@ -519,6 +544,8 @@ function DayColumn({
   nowMin,
   showStrand,
   mark = null,
+  iso,
+  tasksByKey,
   mobile = false,
 }: {
   periods: PeriodFull[];
@@ -530,6 +557,10 @@ function DayColumn({
   nowMin: number;
   showStrand: boolean;
   mark?: DayMark | null;
+  /** this column's calendar date (YYYY-MM-DD) — to look up its tasks */
+  iso: string;
+  /** requirements keyed by `dueDate#subjectId` */
+  tasksByKey: Map<string, TaskFull[]>;
   mobile?: boolean;
 }) {
   const { openClass } = useClassDetail();
@@ -674,6 +705,8 @@ function DayColumn({
         }
 
         const hue = p.subject?.hue ?? "slate";
+        const dueTasks =
+          p.subjectId !== null ? (tasksByKey.get(dueKey(iso, p.subjectId)) ?? []) : [];
         const inner = (
           <>
             <p className="flex items-center gap-1 leading-tight">
@@ -685,6 +718,7 @@ function DayColumn({
                   {p.strand}
                 </span>
               )}
+              <DueFlag tasks={dueTasks} className="ml-auto" />
             </p>
             {/* narrow split columns: strand on its own line so a long code
                 (e.g. PHYSICS) keeps full width instead of truncating behind

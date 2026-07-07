@@ -142,8 +142,8 @@ export async function importBackup(json: string): Promise<ActionResult> {
       }
 
       const insertTask = db.prepare(
-        `INSERT INTO tasks (id, title, details, subject_id, type_id, due_date, due_time, status, moved_from, note, points, created_at, updated_at)
-         VALUES (@id, @title, @details, @subject_id, @type_id, @due_date, @due_time, @status, @moved_from, @note, @points, @created_at, @updated_at)`
+        `INSERT INTO tasks (id, title, details, subject_id, secondary_subject_id, type_id, due_date, due_time, status, moved_from, cancel_reason, note, points, created_at, updated_at)
+         VALUES (@id, @title, @details, @subject_id, @secondary_subject_id, @type_id, @due_date, @due_time, @status, @moved_from, @cancel_reason, @note, @points, @created_at, @updated_at)`
       );
       const now = new Date().toISOString();
       for (const tk of rows<Record<string, unknown>>(data.tasks)) {
@@ -152,11 +152,14 @@ export async function importBackup(json: string): Promise<ActionResult> {
           title: String(tk.title ?? ""),
           details: String(tk.details ?? ""),
           subject_id: Number(tk.subject_id),
+          secondary_subject_id:
+            tk.secondary_subject_id != null ? Number(tk.secondary_subject_id) : null,
           type_id: Number(tk.type_id),
           due_date: String(tk.due_date),
           due_time: tk.due_time != null ? Number(tk.due_time) : null,
           status: String(tk.status ?? "confirmed"),
           moved_from: tk.moved_from != null ? String(tk.moved_from) : null,
+          cancel_reason: tk.cancel_reason != null ? String(tk.cancel_reason) : null,
           note: tk.note != null ? String(tk.note) : null,
           points: tk.points != null ? Number(tk.points) : null,
           created_at: String(tk.created_at ?? now),

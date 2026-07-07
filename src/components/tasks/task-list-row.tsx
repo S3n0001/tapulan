@@ -92,12 +92,19 @@ export function TaskListRow({
         <span className="flex w-full items-center gap-3 pl-[56px] lg:w-auto lg:pl-0">
           {showSubject && (
             <span
-              style={accentStyle(task.subject.hue)}
               className="flex w-16 items-center gap-1.5 lg:justify-end"
+              title={
+                task.secondarySubject
+                  ? `${task.subject.name} × ${task.secondarySubject.name}`
+                  : task.subject.name
+              }
             >
-              <span className="a-dot size-1.5 shrink-0 rounded-full" />
+              <span style={accentStyle(task.subject.hue)} className="a-dot size-1.5 shrink-0 rounded-full" />
               <span className="truncate font-mono text-[11px] font-medium text-muted">
                 {task.subject.short}
+                {task.secondarySubject && (
+                  <span className="text-faint">+{task.secondarySubject.short}</span>
+                )}
               </span>
             </span>
           )}

@@ -59,7 +59,11 @@ export async function GET(request: Request): Promise<Response> {
     if (t.status === "tentative") summary += " (unconfirmed)";
     lines.push(`SUMMARY:${esc(summary)}`);
 
-    const desc: string[] = [`Subject: ${t.subject.name}`];
+    const desc: string[] = [
+      t.secondarySubject
+        ? `Subjects: ${t.subject.name} × ${t.secondarySubject.name}`
+        : `Subject: ${t.subject.name}`,
+    ];
     if (t.points !== null) desc.push(`${t.points} pts`);
     if (t.movedFrom) desc.push(`Moved from ${t.movedFrom}`);
     if (t.details.trim()) desc.push(t.details.trim());

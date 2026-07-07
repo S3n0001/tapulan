@@ -138,7 +138,11 @@ export function TaskPanel({
       open={open}
       onClose={onClose}
       title={task.title}
-      description={task.subject.name}
+      description={
+        task.secondarySubject
+          ? `${task.subject.name} × ${task.secondarySubject.name}`
+          : task.subject.name
+      }
       footer={
         <>
           <Button
@@ -165,13 +169,27 @@ export function TaskPanel({
             <HueBadge hue={task.type.hue}>{task.type.short}</HueBadge>
             <span className="text-[13px] text-muted">{task.type.name}</span>
           </Property>
-          <Property label="Subject">
-            <span style={accentStyle(task.subject.hue)} className="a-dot size-2 rounded-full" />
+          <Property label={task.secondarySubject ? "Classes" : "Subject"}>
+            <span style={accentStyle(task.subject.hue)} className="a-dot size-2 shrink-0 rounded-full" />
             <span className="truncate">
               <span className="font-mono text-[12px] font-semibold">{task.subject.short}</span>
               <span className="ml-1.5 text-muted">{task.subject.name}</span>
             </span>
           </Property>
+          {task.secondarySubject && (
+            <Property label="Collab">
+              <span
+                style={accentStyle(task.secondarySubject.hue)}
+                className="a-dot size-2 shrink-0 rounded-full"
+              />
+              <span className="truncate">
+                <span className="font-mono text-[12px] font-semibold">
+                  {task.secondarySubject.short}
+                </span>
+                <span className="ml-1.5 text-muted">{task.secondarySubject.name}</span>
+              </span>
+            </Property>
+          )}
           <Property label="Due">
             <span className="font-medium">{fmtDateLong(task.dueDate)}</span>
             <span className="tnum ml-auto shrink-0 font-mono text-[12px] text-muted">

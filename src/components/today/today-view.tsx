@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -12,7 +12,7 @@ import {
   Inbox,
   Laptop,
 } from "lucide-react";
-import type { DayMark, PeriodFull, TaskFull } from "@/lib/domain/types";
+import { taskSubjectIds, type DayMark, type PeriodFull, type TaskFull } from "@/lib/domain/types";
 import { liveForDay, periodProgress } from "@/lib/domain/schedule";
 import {
   DAY_MARK_ASYNC_POINTS,
@@ -33,6 +33,7 @@ import {
   fmtMinAmPm,
   isPastDue,
   minutesOf,
+  toISODate,
   type DueTone,
 } from "@/lib/domain/time";
 import { accentStyle } from "@/lib/domain/hues";
@@ -43,6 +44,7 @@ import { Toolbar } from "@/components/shell/toolbar";
 import { HueBadge, WarnFlag } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty";
 import { DoneCheck } from "@/components/tasks/done-check";
+import { DueFlag } from "@/components/tasks/due-flag";
 import { useClassDetail } from "@/components/classes/class-detail";
 
 const DATE_FMT = new Intl.DateTimeFormat("en-PH", {
@@ -85,6 +87,21 @@ export function TodayView({
   const liveActive = isToday && mark === null;
   const live = liveForDay(dayPeriods, nowMin, liveActive);
   const shownDate = new Date(dateISO);
+
+  // requirements due on the shown day, grouped by subject — so each class row
+  // can flag the peta/quiz that belongs to it, right on the timeline
+  const shownISO = toISODate(shownDate);
+  const dueBySubject = useMemo(() => {
+    const map = new Map<number, TaskFull[]>();
+    for (const t of tasks) {
+      if (!isActionable(t) || t.dueDate !== shownISO) continue;
+      // a collab requirement flags on both of its class blocks
+      for (const id of taskSubjectIds(t)) {
+        (map.get(id) ?? map.set(id, []).get(id)!).push(t);
+      }
+    }
+    return map;
+  }, [tasks, shownISO]);
 
   return (
     <div className="anim-view">
@@ -129,6 +146,7 @@ export function TodayView({
               isToday={liveActive}
               showStrand={showStrand}
               asyncDay={mark?.kind === "async"}
+              dueBySubject={dueBySubject}
             />
           )}
         </section>
@@ -376,6 +394,7 @@ function DayTimeline({
   isToday,
   showStrand,
   asyncDay = false,
+  dueBySubject,
 }: {
   periods: PeriodFull[];
   live: ReturnType<typeof liveForDay>;
@@ -384,6 +403,8 @@ function DayTimeline({
   showStrand: boolean;
   /** async day — subjects are shown for self-study, nothing is live */
   asyncDay?: boolean;
+  /** requirements due today, keyed by subject id */
+  dueBySubject: Map<number, TaskFull[]>;
 }) {
   const { openClass } = useClassDetail();
 
@@ -483,6 +504,8 @@ function DayTimeline({
                 )}
               </span>
             </span>
+
+            {p.subject && <DueFlag tasks={dueBySubject.get(p.subject.id) ?? []} className="shrink-0" />}
 
             {isCurrent ? (
               <span className="a-text tnum shrink-0 font-mono text-[11.5px] font-semibold">

@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { Pencil } from "lucide-react";
 import type { PeriodFull, SubjectFull, TaskFull } from "@/lib/domain/types";
@@ -40,10 +40,23 @@ export function ClassPanel({
   const router = useRouter();
   const now = useNow(nowISO, 60_000);
 
-  if (!subject) return null;
+  // The Panel plays its own exit animation on close. The callers clear the
+  // selected subject the moment they close, which would blank this content
+  // and skip that animation — so retain the last shown subject (and its
+  // meetings/tasks) and render from that snapshot while it animates out.
+  const [snap, setSnap] = useState(
+    subject ? { subject, meetings, tasks } : null
+  );
+  useEffect(() => {
+    if (subject) setSnap({ subject, meetings, tasks });
+  }, [subject, meetings, tasks]);
 
-  const weeklyMinutes = meetings.reduce((sum, m) => sum + (m.end - m.start), 0);
-  const openTasks = tasks.filter((t) => t.status !== "done" && t.status !== "cancelled");
+  const view = subject ? { subject, meetings, tasks } : snap;
+  if (!view) return null;
+  const { subject: shown, meetings: shownMeetings, tasks: shownTasks } = view;
+
+  const weeklyMinutes = shownMeetings.reduce((sum, m) => sum + (m.end - m.start), 0);
+  const openTasks = shownTasks.filter((t) => t.status !== "done" && t.status !== "cancelled");
 
   return (
     <Panel
@@ -51,22 +64,22 @@ export function ClassPanel({
       onClose={onClose}
       title={
         <span className="flex items-center gap-2">
-          <span style={accentStyle(subject.hue)} className="a-dot size-2.5 rounded-[3.5px]" />
-          {subject.name}
+          <span style={accentStyle(shown.hue)} className="a-dot size-2.5 rounded-[3.5px]" />
+          {shown.name}
         </span>
       }
       description={
         <span className="font-mono text-[11.5px]">
-          {subject.short}
+          {shown.short}
           <span className="font-sans">
             {" · "}
-            {subject.strand ? `${subject.strand} major` : "core — every strand"}
+            {shown.strand ? `${shown.strand} major` : "core — every strand"}
           </span>
         </span>
       }
       footer={
         onEdit ? (
-          <Button variant="primary" onClick={() => onEdit(subject)}>
+          <Button variant="primary" onClick={() => onEdit(shown)}>
             <Pencil className="size-3.5" />
             Edit subject
           </Button>
@@ -76,19 +89,19 @@ export function ClassPanel({
       <div className="space-y-5">
         <dl className="space-y-2.5">
           <Property label="Teacher">
-            <span className="truncate">{subject.teacher?.name ?? "—"}</span>
+            <span className="truncate">{shown.teacher?.name ?? "—"}</span>
           </Property>
-          {subject.teacher?.note && (
+          {shown.teacher?.note && (
             <Property label="Note">
-              <span className="truncate text-muted">{subject.teacher.note}</span>
+              <span className="truncate text-muted">{shown.teacher.note}</span>
             </Property>
           )}
           <Property label="Room">
-            <span className="tnum font-mono text-[12.5px]">{subject.room ?? "—"}</span>
+            <span className="tnum font-mono text-[12.5px]">{shown.room ?? "—"}</span>
           </Property>
           <Property label="Load">
             <span className="tnum font-mono text-[12.5px]">
-              {meetings.length}×/week · {fmtDuration(weeklyMinutes)}
+              {shownMeetings.length}×/week · {fmtDuration(weeklyMinutes)}
             </span>
           </Property>
         </dl>
@@ -97,11 +110,11 @@ export function ClassPanel({
           <h3 className="mb-1.5 font-mono text-[10.5px] font-semibold uppercase tracking-[0.06em] text-faint">
             Meetings
           </h3>
-          {meetings.length === 0 ? (
+          {shownMeetings.length === 0 ? (
             <p className="text-[12.5px] text-faint">Not on the weekly schedule.</p>
           ) : (
             <ul className="divide-y divide-line/60 rounded-[var(--r-card)] border border-line">
-              {meetings.map((m) => (
+              {shownMeetings.map((m) => (
                 <li key={m.id} className="flex items-center gap-3 px-3 py-2">
                   <span className="w-[76px] shrink-0 text-[12.5px] font-medium text-ink">
                     {DAY_NAMES[m.day]}

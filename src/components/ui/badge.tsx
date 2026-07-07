@@ -37,21 +37,18 @@ export function HueDot({ hue, className }: { hue: string; className?: string }) 
   );
 }
 
-const STATUS: Record<TaskStatus, { label: string; dot: string; text: string }> = {
-  confirmed: { label: "Confirmed", dot: "bg-ok", text: "text-ok-text" },
-  tentative: { label: "Unconfirmed", dot: "bg-warn", text: "text-warn-text" },
-  done: { label: "Done", dot: "bg-ok", text: "text-muted" },
-  cancelled: { label: "Cancelled", dot: "bg-faint", text: "text-faint" },
+const STATUS: Record<TaskStatus, { label: string; text: string }> = {
+  confirmed: { label: "Confirmed", text: "text-ok-text" },
+  tentative: { label: "Unconfirmed", text: "text-warn-text" },
+  done: { label: "Done", text: "text-muted" },
+  cancelled: { label: "Cancelled", text: "text-faint" },
 };
 
-/** Status as dot + word — never color alone. */
+/** Status word — the label carries the meaning; color only reinforces it. */
 export function Status({ status, className }: { status: TaskStatus; className?: string }) {
   const s = STATUS[status];
   return (
-    <span
-      className={cn("inline-flex items-center gap-1.5 text-[12px] font-medium", s.text, className)}
-    >
-      <span className={cn("size-1.5 rounded-full", s.dot)} aria-hidden />
+    <span className={cn("inline-flex items-center text-[12px] font-medium", s.text, className)}>
       {s.label}
     </span>
   );

@@ -61,6 +61,7 @@ interface TaskRow {
   title: string;
   details: string;
   subject_id: number;
+  secondary_subject_id: number | null;
   type_id: number;
   due_date: string;
   due_time: number | null;
@@ -115,6 +116,7 @@ function mapTask(row: TaskRow): Task {
     title: row.title,
     details: row.details,
     subjectId: row.subject_id,
+    secondarySubjectId: row.secondary_subject_id,
     typeId: row.type_id,
     dueDate: row.due_date,
     dueTime: row.due_time,
@@ -246,12 +248,15 @@ export function getTasks(strand?: StrandCode | null): TaskFull[] {
     strand
       ? db
           .prepare(
+            // visible if EITHER the class or its collab class is in this strand
             `SELECT t.* FROM tasks t
              JOIN subjects s ON s.id = t.subject_id
-             WHERE s.strand IS NULL OR s.strand = ?
+             LEFT JOIN subjects s2 ON s2.id = t.secondary_subject_id
+             WHERE (s.strand IS NULL OR s.strand = ?)
+                OR (t.secondary_subject_id IS NOT NULL AND (s2.strand IS NULL OR s2.strand = ?))
              ORDER BY t.due_date, t.due_time IS NULL, t.due_time, t.id`
           )
-          .all(strand)
+          .all(strand, strand)
       : db.prepare("SELECT * FROM tasks ORDER BY due_date, due_time IS NULL, due_time, id").all()
   ) as TaskRow[];
 
@@ -273,7 +278,17 @@ export function getTasks(strand?: StrandCode | null): TaskFull[] {
       const subject = subjects.get(row.subject_id);
       const type = types.get(row.type_id);
       if (!subject || !type) return null;
-      return { ...mapTask(row), subject, type, links: linksByTask.get(row.id) ?? [] };
+      const secondarySubject =
+        row.secondary_subject_id !== null
+          ? (subjects.get(row.secondary_subject_id) ?? null)
+          : null;
+      return {
+        ...mapTask(row),
+        subject,
+        secondarySubject,
+        type,
+        links: linksByTask.get(row.id) ?? [],
+      };
     })
     .filter((t): t is TaskFull => t !== null);
 }
@@ -287,10 +302,12 @@ export function getOpenTaskCount(strand?: StrandCode | null): number {
           .prepare(
             `SELECT COUNT(*) AS n FROM tasks t
              JOIN subjects s ON s.id = t.subject_id
+             LEFT JOIN subjects s2 ON s2.id = t.secondary_subject_id
              WHERE t.status IN ('confirmed','tentative')
-               AND (s.strand IS NULL OR s.strand = ?)`
+               AND ((s.strand IS NULL OR s.strand = ?)
+                 OR (t.secondary_subject_id IS NOT NULL AND (s2.strand IS NULL OR s2.strand = ?)))`
           )
-          .get(strand)
+          .get(strand, strand)
       : db
           .prepare("SELECT COUNT(*) AS n FROM tasks WHERE status IN ('confirmed','tentative')")
           .get()

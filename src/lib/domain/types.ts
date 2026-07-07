@@ -99,6 +99,8 @@ export interface Task {
   title: string;
   details: string;
   subjectId: number;
+  /** optional collab class — a second subject this task also belongs to */
+  secondarySubjectId: number | null;
   typeId: number;
   /** YYYY-MM-DD (local) */
   dueDate: string;
@@ -128,8 +130,20 @@ export interface TaskLink {
 
 export interface TaskFull extends Task {
   subject: SubjectFull;
+  /** resolved collab class, when `secondarySubjectId` is set */
+  secondarySubject: SubjectFull | null;
   type: TaskType;
   links: TaskLink[];
+}
+
+/** Every subject a task belongs to (its class, plus a collab if any). */
+export function taskSubjectIds(t: {
+  subjectId: number;
+  secondarySubjectId: number | null;
+}): number[] {
+  return t.secondarySubjectId !== null && t.secondarySubjectId !== t.subjectId
+    ? [t.subjectId, t.secondarySubjectId]
+    : [t.subjectId];
 }
 
 export interface Settings {

@@ -201,6 +201,8 @@ const TASK_TYPES = [
 
 interface TaskSpec {
   subject: SubjectKey;
+  /** optional collab class — a second subject this task also belongs to */
+  collab?: SubjectKey;
   type: string; // task type short
   title: string;
   details: string;
@@ -221,6 +223,18 @@ interface TaskSpec {
 
 /** The section's real requirements, as announced. Admins own them from here. */
 const TASKS: TaskSpec[] = [
+  {
+    // Cross-subject collab: one requirement shared by two classes. It surfaces
+    // under both CPAR and PE, and counts toward each.
+    subject: "cpar",
+    collab: "pe",
+    type: "PROJ",
+    title: "Folk-dance showcase — art & movement",
+    details:
+      "Group performance staged for CPAR (regional art form) and graded again in PE (execution). One output, two rubrics.",
+    due: "2026-07-17",
+    points: 100,
+  },
   {
     // Cancelled — kept on record (struck through) with an optional reason, so
     // the section sees it was called off rather than silently vanishing.
@@ -276,8 +290,8 @@ export function seedDatabase(db: Database, now: Date = new Date()): void {
     "INSERT INTO task_types (name, short, hue, sort) VALUES (?, ?, ?, ?)"
   );
   const insertTask = db.prepare(
-    `INSERT INTO tasks (title, details, subject_id, type_id, due_date, due_time, status, moved_from, cancel_reason, note, points, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO tasks (title, details, subject_id, secondary_subject_id, type_id, due_date, due_time, status, moved_from, cancel_reason, note, points, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   );
   const insertLink = db.prepare(
     "INSERT INTO task_links (task_id, label, url, kind, sort) VALUES (?, ?, ?, 'link', ?)"
@@ -327,6 +341,7 @@ export function seedDatabase(db: Database, now: Date = new Date()): void {
         task.title,
         task.details,
         subjectIds[task.subject],
+        task.collab ? subjectIds[task.collab] : null,
         typeIds.get(task.type)!,
         task.due,
         task.time ?? null,

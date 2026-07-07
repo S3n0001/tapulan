@@ -19,6 +19,8 @@ export interface TaskInput {
   title: string;
   details: string;
   subjectId: number;
+  /** optional collab class — a second subject the task also belongs to */
+  secondarySubjectId: number | null;
   typeId: number;
   dueDate: string;
   dueTime: number | null;
@@ -93,6 +95,13 @@ export function normalizeTaskInput(input: TaskInput): TaskInput | string {
   const title = input.title.trim();
   if (!title) return "Give the task a title.";
   if (!Number.isInteger(input.subjectId)) return "Pick a subject.";
+  // a collab class is optional; when set it must be a real, different subject
+  const secondarySubjectId =
+    input.secondarySubjectId !== null && Number.isInteger(input.secondarySubjectId)
+      ? input.secondarySubjectId
+      : null;
+  if (secondarySubjectId !== null && secondarySubjectId === input.subjectId)
+    return "The collab class has to be a different subject.";
   if (!Number.isInteger(input.typeId)) return "Pick a type.";
   if (!isISODate(input.dueDate)) return "Pick a valid due date.";
   if (!TASK_STATUSES.includes(input.status)) return "Unknown status.";
@@ -115,6 +124,7 @@ export function normalizeTaskInput(input: TaskInput): TaskInput | string {
     title,
     details: input.details.trim(),
     subjectId: input.subjectId,
+    secondarySubjectId,
     typeId: input.typeId,
     dueDate: input.dueDate,
     dueTime,
@@ -135,8 +145,8 @@ export function insertTask(clean: TaskInput): { id: number } {
   return db.transaction(() => {
     const info = db
       .prepare(
-        `INSERT INTO tasks (title, details, subject_id, type_id, due_date, due_time, status, moved_from, cancel_reason, note, points, created_at, updated_at)
-         VALUES (@title, @details, @subjectId, @typeId, @dueDate, @dueTime, @status, @movedFrom, @cancelReason, @note, @points, @now, @now)`
+        `INSERT INTO tasks (title, details, subject_id, secondary_subject_id, type_id, due_date, due_time, status, moved_from, cancel_reason, note, points, created_at, updated_at)
+         VALUES (@title, @details, @subjectId, @secondarySubjectId, @typeId, @dueDate, @dueTime, @status, @movedFrom, @cancelReason, @note, @points, @now, @now)`
       )
       .run({ ...task, now });
     const id = Number(info.lastInsertRowid);
@@ -152,7 +162,8 @@ export function updateTaskRow(id: number, clean: TaskInput): void {
   db.transaction(() => {
     db.prepare(
       `UPDATE tasks SET
-         title=@title, details=@details, subject_id=@subjectId, type_id=@typeId,
+         title=@title, details=@details, subject_id=@subjectId,
+         secondary_subject_id=@secondarySubjectId, type_id=@typeId,
          due_date=@dueDate, due_time=@dueTime, status=@status, moved_from=@movedFrom,
          cancel_reason=@cancelReason, note=@note, points=@points, updated_at=@now
        WHERE id=@id`

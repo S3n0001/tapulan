@@ -3,12 +3,13 @@
 import { useCallback, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { BookOpen } from "lucide-react";
-import type {
-  PeriodFull,
-  Strand,
-  SubjectFull,
-  TaskFull,
-  Teacher,
+import {
+  taskSubjectIds,
+  type PeriodFull,
+  type Strand,
+  type SubjectFull,
+  type TaskFull,
+  type Teacher,
 } from "@/lib/domain/types";
 import { accentStyle } from "@/lib/domain/hues";
 import { cn } from "@/lib/utils";
@@ -64,7 +65,8 @@ export function ClassesView({
     const map = new Map<number, number>();
     for (const t of tasks) {
       if (t.status === "done" || t.status === "cancelled") continue;
-      map.set(t.subjectId, (map.get(t.subjectId) ?? 0) + 1);
+      // a collab requirement counts toward both of its classes
+      for (const id of taskSubjectIds(t)) map.set(id, (map.get(id) ?? 0) + 1);
     }
     return map;
   }, [tasks]);
@@ -190,7 +192,7 @@ export function ClassesView({
       <ClassPanel
         subject={selected}
         meetings={selected ? (meetingsBySubject.get(selected.id) ?? []) : []}
-        tasks={selected ? tasks.filter((t) => t.subjectId === selected.id) : []}
+        tasks={selected ? tasks.filter((t) => taskSubjectIds(t).includes(selected.id)) : []}
         open={selected !== null}
         onClose={() => select(null)}
         onEdit={isAdmin ? (s) => { select(null); setEditing(s); } : undefined}

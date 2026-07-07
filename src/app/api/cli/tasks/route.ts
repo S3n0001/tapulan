@@ -15,6 +15,7 @@ function light(t: ReturnType<typeof getTasks>[number]) {
     title: t.title,
     type: t.type.short,
     subject: t.subject.short,
+    collab: t.secondarySubject?.short ?? null,
     due: t.dueDate,
     time: t.dueTime,
     status: t.status,
@@ -39,6 +40,7 @@ export async function GET(req: Request) {
 interface CreateBody {
   title?: unknown;
   subject?: unknown; // id or short code
+  collab?: unknown; // optional second class — id or short code
   type?: unknown; // id, short code, or name
   due?: unknown; // YYYY-MM-DD
   time?: unknown; // "HH:MM"
@@ -67,6 +69,21 @@ export async function POST(req: Request) {
     );
   }
 
+  // optional collab class — resolved the same way as `subject`
+  const collabKey = String(body.collab ?? "").trim();
+  let secondarySubjectId: number | null = null;
+  if (collabKey) {
+    const collab = subjects.find(
+      (s) => String(s.id) === collabKey || s.short.toLowerCase() === collabKey.toLowerCase()
+    );
+    if (!collab) {
+      return jsonErr(
+        `Unknown collab class "${collabKey}". One of: ${subjects.map((s) => s.short).join(", ")}.`
+      );
+    }
+    secondarySubjectId = collab.id;
+  }
+
   const types = getTaskTypes();
   const typeKey = String(body.type ?? "").trim();
   const type = types.find(
@@ -86,6 +103,7 @@ export async function POST(req: Request) {
     title: typeof body.title === "string" ? body.title : "",
     details: typeof body.details === "string" ? body.details : "",
     subjectId: subject.id,
+    secondarySubjectId,
     typeId: type.id,
     dueDate: typeof body.due === "string" ? body.due : "",
     dueTime: typeof body.time === "string" && body.time ? inputToMin(body.time) : null,

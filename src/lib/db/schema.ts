@@ -64,6 +64,9 @@ CREATE TABLE IF NOT EXISTS tasks (
   title      TEXT NOT NULL,
   details    TEXT NOT NULL DEFAULT '',
   subject_id INTEGER NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
+  -- optional second class for a collab requirement (e.g. CPAR × PE); the task
+  -- belongs to both. SET NULL so dropping that subject just ends the collab.
+  secondary_subject_id INTEGER REFERENCES subjects(id) ON DELETE SET NULL,
   type_id    INTEGER NOT NULL REFERENCES task_types(id),
   due_date   TEXT NOT NULL,
   due_time   INTEGER,
