@@ -31,6 +31,25 @@ import { IconButton } from "./icon-button";
 const IMAGE_EXT = new Set(["png", "jpg", "jpeg", "gif", "webp", "avif"]);
 const FRAME_EXT = new Set(["pdf", "txt", "csv"]);
 
+/** Raster stills Next's optimizer can safely shrink (no animation to lose). */
+const OPTIMIZE_EXT = new Set(["png", "jpg", "jpeg"]);
+
+/**
+ * Hand the inline <img> a resized copy from Next's image optimizer instead of
+ * the multi-megabyte original — same-origin, re-encoded to WebP/AVIF, cached.
+ * A phone photo or flatbed scan is often several thousand pixels wide; the
+ * viewer never shows it larger than ~1080px, so 2048px is already retina-sharp
+ * while cutting the transfer to a fraction. GIF/WebP/AVIF pass through
+ * untouched so animation survives, and the header "Open" link always points at
+ * the full-resolution original.
+ */
+function displaySrc(src: string, ext: string): string {
+  if (OPTIMIZE_EXT.has(ext)) {
+    return `/_next/image?url=${encodeURIComponent(src)}&w=2048&q=75`;
+  }
+  return src;
+}
+
 function extOf(url: string): string {
   const clean = url.split(/[?#]/)[0];
   const m = clean.match(/\.([a-z0-9]+)$/i);
@@ -199,8 +218,9 @@ export function MaterialViewer({
             <div className="flex h-full w-full items-center justify-center overflow-auto p-3">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src={src}
+                src={displaySrc(src, extOf(link.url))}
                 alt={link.label}
+                decoding="async"
                 className="max-h-full max-w-full rounded-[6px] object-contain shadow-[var(--shadow-pop)]"
               />
             </div>
