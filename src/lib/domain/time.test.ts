@@ -7,6 +7,7 @@ import {
   fromISODate,
   isISODate,
   isPastDue,
+  manilaNow,
   toISODate,
   todayISO,
 } from "./time";
@@ -192,5 +193,21 @@ describe("dueTone", () => {
 describe("todayISO", () => {
   it("returns a YYYY-MM-DD shaped string", () => {
     expect(todayISO()).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+});
+
+describe("manilaNow", () => {
+  // The regression that showed "yesterday" on a UTC host: the server's school
+  // day must land on the same Manila calendar date todayISO() reports, so its
+  // local getters agree regardless of the runtime timezone.
+  it("reads the same Manila calendar date as todayISO", () => {
+    expect(toISODate(manilaNow())).toBe(todayISO());
+  });
+
+  it("exposes an in-range wall clock via local getters", () => {
+    const now = manilaNow();
+    expect(now.getHours()).toBeGreaterThanOrEqual(0);
+    expect(now.getHours()).toBeLessThan(24);
+    expect(now.getDay()).toBe(fromISODate(todayISO()).getDay());
   });
 });

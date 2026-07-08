@@ -84,6 +84,42 @@ export function todayISO(): string {
   return FMT_MANILA_ISO.format(new Date());
 }
 
+const FMT_MANILA_PARTS = new Intl.DateTimeFormat("en-US", {
+  timeZone: "Asia/Manila",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
+  hourCycle: "h23",
+});
+
+/**
+ * The current instant re-expressed as a Date whose *local* getters
+ * (getFullYear / getMonth / getDate / getDay / getHours / …) read the
+ * Asia/Manila wall clock, whatever timezone the runtime sits in. Use this —
+ * never a bare `new Date()` — anywhere the server derives the school day or
+ * date, otherwise a UTC host renders "yesterday" through Manila's small hours.
+ *
+ * The live client clock already self-corrects to the device (Manila, for this
+ * section) via `useNow`; this is the server-side equivalent so SSR agrees.
+ */
+export function manilaNow(): Date {
+  const parts: Record<string, number> = {};
+  for (const p of FMT_MANILA_PARTS.formatToParts(new Date())) {
+    if (p.type !== "literal") parts[p.type] = Number(p.value);
+  }
+  return new Date(
+    parts.year,
+    parts.month - 1,
+    parts.day,
+    parts.hour % 24, // guard the "24" some ICU builds emit at midnight
+    parts.minute,
+    parts.second
+  );
+}
+
 export function isISODate(value: string): boolean {
   // round-trip so calendar-impossible dates (Feb 31, month 13) that Date
   // would silently normalize to another day are rejected

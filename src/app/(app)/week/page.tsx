@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { currentStrand } from "@/lib/session";
 import { getDayMarkMap, getPeriods, getTasks } from "@/lib/queries";
 import { isActionable } from "@/lib/domain/tasks";
-import { DAY_SHORT, addDays, schoolWeekMonday, toISODate } from "@/lib/domain/time";
+import { DAY_SHORT, addDays, manilaNow, schoolWeekMonday, toISODate } from "@/lib/domain/time";
 import { WeekView, type WeekDay } from "@/components/week/week-view";
 
 export const metadata: Metadata = { title: "Week" };
@@ -19,7 +19,9 @@ export default async function WeekPage({
   const { w } = await searchParams;
   const offset = clampOffset(Number.parseInt(w ?? "0", 10) || 0);
 
-  const now = new Date();
+  // Anchor "today" (and the week it lands in) to Manila, not the server clock,
+  // so a UTC host doesn't mark yesterday as today during Manila's small hours.
+  const now = manilaNow();
   const monday = addDays(schoolWeekMonday(now), offset * 7);
   const todayISO = toISODate(now);
   const marks = getDayMarkMap(toISODate(monday), toISODate(addDays(monday, 4)));
@@ -54,7 +56,7 @@ export default async function WeekPage({
       days={days}
       tasks={openTasks}
       weekOffset={offset}
-      nowISO={now.toISOString()}
+      nowISO={new Date().toISOString()}
       showStrand={strand === null}
     />
   );

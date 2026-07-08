@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 
 import { getDayMark, getPeriods, getSettings, getStrands, getTasks } from "@/lib/queries";
 import { resolveScheduleDay } from "@/lib/domain/schedule";
-import { toISODate } from "@/lib/domain/time";
+import { manilaNow, toISODate } from "@/lib/domain/time";
 import { sectionStatus } from "@/lib/domain/welcome";
 import { WelcomeCover } from "@/components/welcome/welcome-cover";
 
@@ -19,7 +19,9 @@ export const metadata: Metadata = {
 };
 
 export default function WelcomePage() {
-  const now = new Date();
+  // Manila wall clock, so the "as of today" colophon matches the app on a UTC
+  // host during Manila's early morning (see manilaNow).
+  const now = manilaNow();
   const settings = getSettings();
   const strands = getStrands();
 
