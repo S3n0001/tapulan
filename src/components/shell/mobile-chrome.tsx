@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Lock, Search } from "lucide-react";
+import { Lock, Search, SlidersHorizontal } from "lucide-react";
 import type { Strand, StrandCode } from "@/lib/domain/types";
 import { cn } from "@/lib/utils";
 import { IconButton } from "@/components/ui/icon-button";
@@ -10,6 +10,7 @@ import { useIsAdmin } from "./admin-context";
 import { NAV, isNavActive, viewTitle } from "./nav";
 import { StrandSwitcher } from "./strand-switcher";
 import { openPalette } from "./command-palette";
+import { openSettings } from "@/components/settings/settings-modal";
 
 /** Slim mobile top bar: the current view's name + the three global controls. */
 export function MobileTopBar({
@@ -31,6 +32,14 @@ export function MobileTopBar({
       <IconButton aria-label="Search" onClick={openPalette}>
         <Search className="size-4" />
       </IconButton>
+      <button
+        type="button"
+        onClick={openSettings}
+        aria-label="Settings"
+        className="inline-flex size-7 items-center justify-center rounded-[var(--r-control)] text-muted transition-[color,background-color,transform] hover:bg-surface-2 hover:text-ink active:scale-95"
+      >
+        <SlidersHorizontal className="size-4" />
+      </button>
       {/* hidden from students — appears only for a signed-in admin */}
       {isAdmin && (
         <Link

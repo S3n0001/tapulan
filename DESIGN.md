@@ -3,7 +3,7 @@
 Mood: **a control panel, not a website** — Linear-grade density and restraint. Near-black
 calm, hairline structure, one cobalt signal, and every other color earning its place as
 *data*. Dark is the default (the reference aesthetic and the 10-PM-homework companion);
-light is a first-class manual choice.
+light and sepia (the logbook on warm paper) are first-class manual choices.
 
 ## Shell
 
@@ -19,8 +19,18 @@ light is a first-class manual choice.
 - **Admin is invisible.** No student-visible entry: the sidebar/top-bar items render only
   for a signed-in admin; the ⌘K palette lists Admin only once someone deliberately types
   it; `/admin` is the door.
-- **No onboarding.** Without a strand the app shows the whole section (split blocks carry
-  strand chips); picking a strand in the switcher just narrows the data. Cookie-persisted.
+- **Soft first-run gate.** A brand-new device is met once by the landing (`/welcome`) — a
+  calm, login-free "inside cover" that prints the real section identity, states the tool's job
+  in one sentence, and lets you pick your strand (or take the whole section) from a keyboard-first
+  picker whose rows *are* the commit buttons. After that an `onboarded` cookie makes `/` open
+  straight to Today, so a returning 6:50 AM glance never sees it again; only the bare `/` is
+  gated (middleware), never deep links. A strand is never *required* — without one the app shows
+  the whole section (split blocks carry strand chips); picking one just narrows the data, and it
+  stays changeable from the switcher. Both choices are cookie-persisted. The landing is
+  section-agnostic — identity, strands and the honest "as of today" line all come from the
+  database — so another section reuses it unchanged. It is `/welcome`'s own route group (no app
+  chrome), synchronous (no `loading.tsx`), and obeys the same restraint as the tool: no gloss,
+  no metrics, cobalt only on the focus ring.
 
 ## Color
 
@@ -30,30 +40,46 @@ color is data: the 14-hue functional ramp bound to subjects and task types in SQ
 
 ### Core tokens (OKLCH)
 
-| Role | Dark (default) | Light |
-|---|---|---|
-| `--shell` (app void) | `oklch(0.145 0.003 265)` | `oklch(0.962 0.002 265)` |
-| `--bg` (content panel) | `oklch(0.178 0.003 265)` | `oklch(0.995 0 0)` |
-| `--surface` (cards, inputs) | `oklch(0.205 0.0035 265)` | `oklch(0.972 0.002 265)` |
-| `--surface-2` (active/hover-2) | `oklch(0.245 0.004 265)` | `oklch(0.945 0.003 265)` |
-| `--pop` (overlays: menus, palette, panels, toasts) | `oklch(0.222 0.004 265)` | `oklch(0.998 0 0)` |
-| `--ink` | `oklch(0.945 0.003 265)` | `oklch(0.215 0.012 265)` |
-| `--muted` | `oklch(0.715 0.006 265)` | `oklch(0.455 0.012 265)` |
-| `--faint` (micro-meta, still ≥4.5:1) | `oklch(0.605 0.007 265)` | `oklch(0.55 0.01 265)` |
-| `--line` / `--line-strong` | `oklch(1 0 0 / 0.07)` / `0.11` | `oklch(0.918 …)` / `0.865` |
-| `--brand` (fills, white text) | `oklch(0.56 0.17 252)` | `oklch(0.5 0.16 252)` |
-| `--brand-text` (links/active) | `oklch(0.78 0.11 252)` | `oklch(0.47 0.15 252)` |
+| Role | Dark (default) | Light | Sepia |
+|---|---|---|---|
+| `--shell` (app void) | `oklch(0.145 0.001 265)` | `oklch(0.955 0.004 90)` | `oklch(0.905 0.042 62)` |
+| `--bg` (content panel) | `oklch(0.178 0.001 265)` | `oklch(0.992 0.002 95)` | `oklch(0.952 0.038 65)` |
+| `--surface` (cards, inputs) | `oklch(0.205 0.001 265)` | `oklch(0.966 0.004 90)` | `oklch(0.928 0.043 63)` |
+| `--surface-2` (active/hover-2) | `oklch(0.245 0.001 265)` | `oklch(0.938 0.005 90)` | `oklch(0.902 0.048 61)` |
+| `--pop` (overlays: menus, palette, panels, toasts) | `oklch(0.222 0.001 265)` | `oklch(0.997 0.001 95)` | `oklch(0.966 0.03 67)` |
+| `--ink` | `oklch(0.945 0.001 265)` | `oklch(0.32 0.012 80)` | `oklch(0.3 0.04 48)` |
+| `--muted` | `oklch(0.715 0.001 265)` | `oklch(0.455 0.012 80)` | `oklch(0.435 0.042 50)` |
+| `--faint` (micro-meta, still ≥4.5:1) | `oklch(0.605 0.001 265)` | `oklch(0.55 0.01 80)` | `oklch(0.49 0.038 52)` |
+| `--line` / `--line-strong` | `oklch(1 0 0 / 0.07)` / `0.11` | `oklch(0.912 …)` / `0.858` | `oklch(0.867 …)` / `0.802` |
+| `--brand` (fills, white text) | `oklch(0.56 0.17 252)` | `oklch(0.5 0.16 252)` | inherits light |
+| `--brand-text` (links/active) | `oklch(0.78 0.11 252)` | `oklch(0.47 0.15 252)` | inherits light |
+
+**Sepia** is a light-family theme, not a third color system: only the neutral
+architecture (warm-parchment ground, hue ~48–65 — Claude-warm orange-brown, never the
+yellow-green highlighter band — with sepia-brown ink), tint strengths, and warm-brown
+shadows are overridden; cobalt, the semantic states, and the hue ramp inherit from light
+— blue ink and colored data on parchment. The paper (`--bg` ≈ `#ffebd5`) is an aged-manila
+warmth you can actually see, not a near-white and not a butter cream: the warmth is
+carried by *chroma held at a still-light lightness* rather than by going dark, so the
+sheet reads unmistakably sepia while every inherited semantic text colour still clears AA.
+The tan shell/desk sits a clear step below the paper so the sidebar keeps its edge. Text
+tokens verified ≥4.5:1 on every surface they land on — bg, cards, active rows and the
+sidebar. Selected in settings
+(System / Light / Dark / Sepia), by name in ⌘K, or via the sidebar toggle's
+light → dark → sepia cycle. The theme's `<html>` class is `theme-sepia`, **never**
+`.sepia` — Tailwind ships a `sepia` filter utility (`filter: sepia(100%)`) that would
+colour-wash the entire app; next-themes remaps the name via its `value` prop.
 
 Semantic states: `--ok` (emerald), `--warn` (amber — tentative/moved), `--danger`
 (overdue/destructive), lightness-swapped per theme. Contrast verified ≥4.5:1 for every
-text token on `--bg` in both themes.
+text token on `--bg` in every theme.
 
 ### Functional hue ramp
 
 14 named hues (`red … rose` + `slate`), text-grade in both themes. Components receive a
 hue via the `--a` custom property (`accentStyle(hue)`); `.a-*` utilities derive text,
-dots, tints (`--tint` 16/23/30% dark · 9/13/19% light), borders, rings. **No raw hex in
-components.**
+dots, tints (`--tint` 16/23/30% dark · 9/13/19% light · 10/14/20% sepia), borders,
+rings. **No raw hex in components.**
 
 ## Typography
 
@@ -78,10 +104,17 @@ Vocabulary lives in globals.css; components bind via `usePresence` (mount-throug
   desktop via media query), `anim-fade` (backdrops), `anim-toast`, `anim-view` (route
   content, 4px rise).
 - Exits keyed on `[data-state="closed"]`: pop-out / sheet-down / panel-out / fade-out.
+  Callers never conditional-mount an overlay (`{editing && <Editor open …>}` kills the
+  exit mid-flight) — they keep it mounted, drive `open`, and render from a
+  `useRetained` snapshot so the closing surface keeps its final content.
 - Feedback: `.tap` / `.press` scale-on-active for buttons, chips, checks (70ms);
-  `done-pop` + `done-tick` SVG stroke draw on the personal check; sliding thumb on
-  segmented controls; `anim-underline` on tab switches; the week's now-line and
-  gutter time chip glide on the minute tick (`transition: top`, linear).
+  `done-pop` + `done-tick` SVG stroke draw on the personal check *and* every form
+  Checkbox; sliding thumb on segmented controls; `anim-underline` on tab switches; the
+  week's now-line and gutter time chip glide on the minute tick (`transition: top`,
+  linear).
+- Form pickers are the custom `Select` (popover + menu items, hue dots, per-option
+  hints) — never the native `<select>`, which can't carry the app's data-color
+  vocabulary or its open/close motion.
 - Loading: route-level skeletons mirror each view's exact geometry (`.skeleton`,
   a quiet opacity pulse — never a gradient sweep), so the content swap is a
   no-shift replace. The live "now" dot pulse and the skeleton pulse are the only loops.
@@ -102,9 +135,16 @@ Vocabulary lives in globals.css; components bind via `usePresence` (mount-throug
   per-day popover). Deadline chips are type-hued (bar · title · unconfirmed dot · mono
   time); handled work strikes and recedes; open-but-past flips to danger. Day marks reuse
   the week vocabulary in miniature — async wash, hatched no-class, tinted band. Weekends
-  sit on a darker wash; adjacent-month days fade; today = cobalt badge. Mobile: dot-grid
-  month (type-hue dots, mark underline bars, swipe to page) over a selected-day agenda of
-  standard task rows. Months page client-side, mirrored to `?m=YYYY-MM`.
+  sit on a darker wash; adjacent-month days fade; today = cobalt badge. Every day number
+  is a peek button (hover circle → the day popover, GCal's day affordance); the toolbar's
+  month label opens the **month jumper** — a mini-month popover (fixed six weeks, density
+  dots: faint = open work, danger = overdue; footer jumps to today) that pages any
+  distance and lands the canvas (and, on mobile, the agenda) on the picked day. Toolbar
+  keeps a persistent mono "Today"; ← / → page months, T jumps home. Admins get a
+  hover-revealed "+" per cell that opens the task editor seeded with that due date —
+  still no student-visible admin surface. Mobile: dot-grid month (type-hue dots, mark
+  underline bars, swipe to page) over a selected-day agenda of standard task rows.
+  Months page client-side, mirrored to `?m=YYYY-MM`.
 - **Tasks:** issue-tracker list — fixed-width aligned columns (check · type badge · title
   + flags · subject · pts · due), sticky bucket headers, type-filter chips with counts.
   Selection lives in the URL (`?task=id`) so ⌘K, Today, and shared links open the same

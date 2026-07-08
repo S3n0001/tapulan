@@ -7,6 +7,8 @@ import type { PeriodFull, SubjectFull, TaskFull, TaskType } from "@/lib/domain/t
 import { groupByBucket } from "@/lib/domain/tasks";
 import { useNow } from "@/hooks/use-now";
 import { useDone } from "@/hooks/use-done";
+import { usePrefs } from "@/hooks/use-prefs";
+import { useRetained } from "@/hooks/use-retained";
 import { cn } from "@/lib/utils";
 import { EmptyState } from "@/components/ui/empty";
 import { Button } from "@/components/ui/button";
@@ -62,9 +64,14 @@ export function TasksView({
   );
 
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
-  const [showDone, setShowDone] = useState(false);
+  // "show done & cancelled" is a device preference, shared with the Settings page
+  const { prefs, setPref } = usePrefs();
+  const showDone = prefs.showDone;
   const [localSelected, setLocalSelected] = useState<number | null>(null);
   const [editing, setEditing] = useState<TaskFull | "new" | null>(null);
+  // retained through the close so the editor's exit animation plays with the
+  // last-edited task still on it (mirrors TaskPanel's own snapshot)
+  const shownEditing = useRetained(editing);
 
   // URL-driven selection (deep links) outside admin; local state inside
   const urlSelected = Number(searchParams.get("task")) || null;
@@ -133,7 +140,11 @@ export function TasksView({
 
   const controls = (
     <>
-      <Checkbox checked={showDone} onChange={setShowDone} label="Done & cancelled" />
+      <Checkbox
+        checked={showDone}
+        onChange={(v) => setPref("showDone", v)}
+        label="Done & cancelled"
+      />
       {isAdmin && (
         <Button size="sm" variant="primary" onClick={() => setEditing("new")}>
           <Plus className="size-3.5" />
@@ -147,6 +158,7 @@ export function TasksView({
     <>
       {groups.length === 0 ? (
         <EmptyState
+          fill
           icon={ListTodo}
           title={typeFilter !== "all" || showDone ? "Nothing matches these filters" : "All clear"}
           action={
@@ -163,46 +175,51 @@ export function TasksView({
             : "New requirements show up here the moment an admin posts them."}
         </EmptyState>
       ) : (
-        <div>
-          {groups.map((group) => (
-            <section key={group.bucket}>
-              <div
-                className={cn(
-                  "sticky z-10 flex h-7 items-center gap-2 border-b border-line/70 bg-[color-mix(in_oklab,var(--surface)_45%,var(--bg))] px-3.5 backdrop-blur lg:px-4",
-                  embedded
-                    ? "top-0"
-                    : "top-[calc(3rem+env(safe-area-inset-top)+4.875rem)] lg:top-0"
-                )}
-              >
-                <h3
+        <>
+          <div>
+            {groups.map((group) => (
+              <section key={group.bucket}>
+                <div
                   className={cn(
-                    "text-[11px] font-medium",
-                    group.bucket === "overdue" ? "text-danger-text" : "text-muted"
+                    "sticky z-10 flex h-7 items-center gap-2 border-b border-line/70 bg-[color-mix(in_oklab,var(--surface)_45%,var(--bg))] px-3.5 backdrop-blur lg:px-4",
+                    embedded
+                      ? "top-0"
+                      : "top-[calc(3rem+env(safe-area-inset-top)+4.875rem)] lg:top-0"
                   )}
                 >
-                  {group.label}
-                </h3>
-                <span className="tnum font-mono text-[10.5px] text-faint">
-                  {group.tasks.length}
-                </span>
-              </div>
-              <ul className="divide-y divide-line/80">
-                {group.tasks.map((task) => (
-                  <li key={task.id}>
-                    <TaskListRow
-                      task={task}
-                      now={now}
-                      done={isDone(task.id)}
-                      selected={task.id === selectedId}
-                      onToggleDone={() => toggleDoneWithToast(task.id)}
-                      onOpen={() => select(task.id)}
-                    />
-                  </li>
-                ))}
-              </ul>
-            </section>
-          ))}
-        </div>
+                  <h3
+                    className={cn(
+                      "text-[11px] font-medium",
+                      group.bucket === "overdue" ? "text-danger-text" : "text-muted"
+                    )}
+                  >
+                    {group.label}
+                  </h3>
+                  <span className="tnum font-mono text-[10.5px] text-faint">
+                    {group.tasks.length}
+                  </span>
+                </div>
+                <ul className="divide-y divide-line/80">
+                  {group.tasks.map((task) => (
+                    <li key={task.id}>
+                      <TaskListRow
+                        task={task}
+                        now={now}
+                        done={isDone(task.id)}
+                        selected={task.id === selectedId}
+                        onToggleDone={() => toggleDoneWithToast(task.id)}
+                        onOpen={() => select(task.id)}
+                      />
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ))}
+          </div>
+          {/* fill the tail so a short list rests on a considered surface —
+              only in the standalone view, where the panel owns the height */}
+          {!embedded && <div aria-hidden className="canvas-floor min-h-16 flex-1" />}
+        </>
       )}
 
       <TaskPanel
@@ -223,13 +240,13 @@ export function TasksView({
         nowISO={nowISO}
       />
 
-      {isAdmin && editing !== null && (
+      {isAdmin && (
         <TaskEditor
-          task={editing === "new" ? null : editing}
+          task={shownEditing === null || shownEditing === "new" ? null : shownEditing}
           subjects={subjects}
           types={types}
           periods={periods}
-          open
+          open={editing !== null}
           onClose={() => setEditing(null)}
         />
       )}

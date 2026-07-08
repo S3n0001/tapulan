@@ -26,18 +26,20 @@ const dueKey = (iso: string, subjectId: number) => `${iso}#${subjectId}`;
  */
 
 // px per minute. On desktop the scale is fluid: the canvas measures itself
-// and picks whatever px/min fits the whole week in the viewport — clamped
-// both ways. The MIN floor keeps a 15-min homeroom readable (below it the
-// canvas scrolls instead of squishing); the MAX ceiling stops a tall monitor
-// from ballooning a 90-min class into a near-empty slab (it just leaves slack
-// at the bottom instead). Mobile keeps a fixed, taller scale since one day
-// owns the full width and vertical scroll is natural there.
+// and stretches px/min so the whole week exactly fills the panel height — the
+// same fill-to-viewport move the month grid makes (rowH = gridH / weeks). The
+// MIN floor keeps a 15-min homeroom readable (below it the canvas scrolls
+// instead of squishing). No ceiling: a tall monitor makes blocks taller — and
+// taller blocks cross more density tiers, so they surface name/teacher — rather
+// than leaving a dead slab of slack at the bottom. Mobile keeps a fixed, taller
+// scale since one day owns the full width and vertical scroll is natural there.
 const PX_DESKTOP_FALLBACK = 1.2; // pre-measure / SSR — a typical fitted value
 const MIN_PX_DESKTOP = 1.0;
-const MAX_PX_DESKTOP = 1.25;
 const PX_MOBILE = 1.8;
-// breathing room above/below the canvas so half-height hour labels survive
-const CANVAS_PAD = 16;
+// bottom breathing room so the last half-height hour label survives. The top is
+// flush against the day header (no gap) — the first label is top-anchored there
+// instead of centered, so it doesn't clip.
+const CANVAS_PAD = 8;
 
 export interface WeekDay {
   /** 1 = Monday … 5 = Friday */
@@ -183,10 +185,7 @@ export function WeekView({
   }, []);
   const pxDesktop =
     canvasH > 0
-      ? Math.min(
-          MAX_PX_DESKTOP,
-          Math.max(MIN_PX_DESKTOP, (canvasH - CANVAS_PAD) / total)
-        )
+      ? Math.max(MIN_PX_DESKTOP, (canvasH - CANVAS_PAD) / total)
       : PX_DESKTOP_FALLBACK;
 
   const hours = useMemo(() => {
@@ -236,9 +235,9 @@ export function WeekView({
   if (periods.length === 0) {
     return (
       <ViewChrome
-        title="Week"
+        title={weekLabel || "Week"}
         icon={CalendarDays}
-        meta={<span className="tnum">{relLabel}</span>}
+        meta={<span className="tnum lg:hidden">{relLabel}</span>}
         right={weekNav}
       >
         <EmptyState icon={CalendarDays} title="No schedule yet">
@@ -250,9 +249,9 @@ export function WeekView({
 
   return (
     <ViewChrome
-      title="Week"
+      title={weekLabel || "Week"}
       icon={CalendarDays}
-      meta={<span className="tnum">{relLabel}</span>}
+      meta={<span className="tnum lg:hidden">{relLabel}</span>}
       right={weekNav}
       mobileSubrow={
         <div role="tablist" aria-label="Day" className="grid grid-cols-5 lg:hidden">
@@ -304,49 +303,64 @@ export function WeekView({
 
       {/* ------------------------------------------------ desktop grid */}
       <div className="hidden lg:flex lg:min-h-0 lg:flex-1 lg:flex-col">
-        <div className="grid shrink-0 grid-cols-[48px_repeat(5,minmax(0,1fr))] border-b border-line bg-bg/95">
+        <div className="grid shrink-0 grid-cols-[48px_repeat(5,minmax(0,1fr))]">
           <div />
           {days.map((d) => (
             <div
               key={d.day}
               className={cn(
-                "flex h-9 items-center justify-center gap-1.5 border-l border-line/70",
-                d.isToday ? "text-ink" : "text-muted"
+                "flex flex-col items-center justify-center gap-1 border-l border-line/70 py-2.5",
+                d.isToday && "bg-[color-mix(in_oklab,var(--brand)_6%,transparent)]"
               )}
             >
-              <span className="font-mono text-[10.5px] font-semibold uppercase tracking-[0.08em]">
-                {d.label}
+              {/* weekday label + this day's status (mark badge, due count) */}
+              <span className="flex items-center gap-1.5 leading-none">
+                <span
+                  className={cn(
+                    "font-mono text-[10px] font-semibold uppercase tracking-[0.08em]",
+                    d.isToday ? "text-brand-text" : "text-faint"
+                  )}
+                >
+                  {d.label}
+                </span>
+                {d.mark && (
+                  <span
+                    style={accentStyle(DAY_MARK_HUE[d.mark.kind])}
+                    className="a-text a-tint-2 rounded-[3px] px-1 py-px font-mono text-[8.5px] font-semibold uppercase tracking-[0.04em]"
+                  >
+                    {DAY_MARK_SHORT[d.mark.kind]}
+                  </span>
+                )}
+                <DueChip count={d.dueCount} overdue={d.overdue} />
               </span>
+              {/* date number — today sits in a filled brand disc */}
               <span
                 className={cn(
-                  "tnum text-[12.5px] font-semibold",
-                  d.isToday &&
-                    "grid size-[22px] place-items-center rounded-full bg-brand text-[11.5px] text-on-brand"
+                  "tnum font-semibold leading-none",
+                  d.isToday
+                    ? "grid size-[24px] place-items-center rounded-full bg-brand text-[13px] text-on-brand"
+                    : "text-[15px] text-ink"
                 )}
               >
                 {d.dateNum}
               </span>
-              {d.mark && (
-                <span
-                  style={accentStyle(DAY_MARK_HUE[d.mark.kind])}
-                  className="a-text a-tint-2 rounded-[3px] px-1 py-px font-mono text-[8.5px] font-semibold uppercase tracking-[0.04em]"
-                >
-                  {DAY_MARK_SHORT[d.mark.kind]}
-                </span>
-              )}
-              <DueChip count={d.dueCount} overdue={d.overdue} />
             </div>
           ))}
         </div>
 
         <div ref={canvasRef} className="min-h-0 flex-1 overflow-y-auto">
-          <div className="grid grid-cols-[48px_repeat(5,minmax(0,1fr))] py-2">
+          <div className="grid grid-cols-[48px_repeat(5,minmax(0,1fr))] pb-2">
             {/* hour gutter */}
             <div className="relative" style={{ height: total * pxDesktop }}>
               {hours.map((m) => (
                 <span
                   key={m}
-                  className="tnum absolute right-1.5 -translate-y-1/2 font-mono text-[10px] text-faint"
+                  className={cn(
+                    "tnum absolute right-1.5 font-mono text-[10px] text-faint",
+                    // the first label hangs from the flush top edge; the rest
+                    // center on their hour so they read against the blocks
+                    m !== dayStart && "-translate-y-1/2"
+                  )}
                   style={{ top: (m - dayStart) * pxDesktop }}
                 >
                   {fmtMin(m)}
@@ -368,7 +382,6 @@ export function WeekView({
                 dayStart={dayStart}
                 total={total}
                 px={pxDesktop}
-                hours={hours}
                 isToday={d.isToday}
                 nowMin={nowMin}
                 showStrand={showStrand}
@@ -423,7 +436,6 @@ export function WeekView({
             dayStart={dayStart}
             total={total}
             px={PX_MOBILE}
-            hours={hours}
             isToday={todayDay === mobileDay}
             nowMin={nowMin}
             showStrand={showStrand}
@@ -549,7 +561,6 @@ function DayColumn({
   dayStart,
   total,
   px,
-  hours,
   isToday,
   nowMin,
   showStrand,
@@ -562,7 +573,6 @@ function DayColumn({
   dayStart: number;
   total: number;
   px: number;
-  hours: number[];
   isToday: boolean;
   nowMin: number;
   showStrand: boolean;
@@ -590,21 +600,21 @@ function DayColumn({
     <div
       className={cn(
         "relative border-l border-line/70",
-        isToday && "bg-[color-mix(in_oklab,var(--brand)_7%,transparent)]",
+        isToday && mobile && "bg-[color-mix(in_oklab,var(--brand)_7%,transparent)]",
         mobile && "mr-3 rounded-r-none border-r border-line/70"
       )}
       style={{ height: total * px }}
     >
-      {/* hour rules */}
-      {hours.map((m) => (
+      {/* today wash — covers the column flush to the day header (the grid no
+          longer pads the top), and bleeds 8px into the bottom padding so it
+          doesn't stop short. Mobile keeps the wash on the column itself,
+          aligned with its side borders. */}
+      {isToday && !mobile && (
         <div
-          key={m}
           aria-hidden
-          className="absolute inset-x-0 border-t border-line/55"
-          style={{ top: (m - dayStart) * px }}
+          className="pointer-events-none absolute -bottom-2 top-0 inset-x-0 bg-[color-mix(in_oklab,var(--brand)_7%,transparent)]"
         />
-      ))}
-
+      )}
       {/* breaks: full-width dashed bands, same treatment as fixtures */}
       {!noClass && breaks.map((p) => {
         const top = (p.start - dayStart) * px + 1;

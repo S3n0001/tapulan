@@ -25,6 +25,7 @@ export default function CalendarLoading() {
       right={
         <span className="flex items-center gap-1.5">
           <Skeleton className="h-6 w-24 rounded-[var(--r-chip)]" />
+          <Skeleton className="h-6 w-12 rounded-[var(--r-chip)]" />
           <Skeleton className="size-7 rounded-[var(--r-control)]" />
           <Skeleton className="size-7 rounded-[var(--r-control)]" />
         </span>
@@ -40,21 +41,21 @@ export default function CalendarLoading() {
           {Array.from({ length: 7 }, (_, i) => (
             <div
               key={i}
-              className={`flex h-8 items-center px-2 ${i > 0 ? "border-l border-line/60" : ""}`}
+              className={`flex h-8 items-center px-2 ${i > 0 ? "border-l border-line" : ""}`}
             >
               <Skeleton className="h-2.5 w-7" />
             </div>
           ))}
         </div>
         <div
-          className="grid min-h-[500px] flex-1 grid-cols-7"
+          className="grid min-h-[480px] flex-1 grid-cols-7"
           style={{ gridTemplateRows: "repeat(5, minmax(0, 1fr))" }}
         >
           {CELL_CHIPS.map((chips, i) => (
             <div
               key={i}
-              className={`flex min-w-0 flex-col overflow-hidden ${i >= 7 ? "border-t border-line/60" : ""} ${
-                i % 7 > 0 ? "border-l border-line/60" : ""
+              className={`flex min-w-0 flex-col overflow-hidden ${i >= 7 ? "border-t border-line" : ""} ${
+                i % 7 > 0 ? "border-l border-line" : ""
               }`}
             >
               <div className="flex h-6 shrink-0 items-center px-2 pt-1">

@@ -11,6 +11,7 @@ import {
   GraduationCap,
   Info,
   Link2,
+  Maximize2,
   Pencil,
   Repeat,
   RotateCcw,
@@ -53,6 +54,8 @@ import { MenuItem } from "@/components/ui/menu";
 import { InlineText, InlineTextArea } from "@/components/ui/inline-text";
 import { useToast } from "@/components/ui/toast";
 import { useConfirm } from "@/components/ui/confirm";
+import { MaterialViewer, isPreviewable } from "@/components/ui/material-viewer";
+import { usePrefs } from "@/hooks/use-prefs";
 import { useIsAdmin } from "@/components/shell/admin-context";
 
 /**
@@ -220,6 +223,7 @@ export function TaskPanel({
   const isAdmin = useIsAdmin();
   const toast = useToast();
   const confirm = useConfirm();
+  const { prefs } = usePrefs();
   const now = useNow(nowISO, 60_000);
   const [pending, start] = useTransition();
   const [moving, setMoving] = useState(false);
@@ -239,6 +243,8 @@ export function TaskPanel({
   // optimistic overlay — a committed inline edit shows instantly; the server
   // refresh (or a failure) reconciles it
   const [override, setOverride] = useState<{ id: number; patch: Partial<TaskFull> } | null>(null);
+  // which material the in-app viewer is showing, or null when it's closed
+  const [viewerIndex, setViewerIndex] = useState<number | null>(null);
 
   // The Panel plays its own exit animation on close. The callers clear the
   // selected task the moment they close, which would unmount this content
@@ -261,6 +267,7 @@ export function TaskPanel({
       setCancelReason("");
       setPicker(null);
       setOverride(null);
+      setViewerIndex(null);
     }
   }, [task]);
 
@@ -732,13 +739,23 @@ export function TaskPanel({
           </section>
         )}
 
-        {/* materials */}
+        {/* materials — previewable ones (images, PDFs, text) open in an in-app
+            viewer; office files and external links keep their honest new-tab
+            open. The "Open materials in a new tab" pref forces everything out. */}
         {task.links.length > 0 && (
           <section>
             <h3 className="mb-1.5 text-[11px] font-medium text-muted">Materials</h3>
             <ul className="space-y-1.5">
-              {task.links.map((link) => {
+              {task.links.map((link, idx) => {
                 const href = safeHref(link.url);
+                const inApp = href !== null && isPreviewable(link) && !prefs.materialsNewTab;
+                const trailing = !href ? null : inApp ? (
+                  <Maximize2 className="size-3.5 shrink-0 text-faint transition-colors group-hover:text-muted" />
+                ) : link.kind === "file" ? (
+                  <Download className="size-3.5 shrink-0 text-faint transition-colors group-hover:text-muted" />
+                ) : (
+                  <ExternalLink className="size-3.5 shrink-0 text-faint transition-colors group-hover:text-muted" />
+                );
                 const inner = (
                   <>
                     {link.kind === "file" ? (
@@ -749,33 +766,28 @@ export function TaskPanel({
                     <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-ink">
                       {link.label}
                     </span>
-                    {href ? (
-                      link.kind === "file" ? (
-                        <Download className="size-3.5 shrink-0 text-faint transition-colors group-hover:text-muted" />
-                      ) : (
-                        <ExternalLink className="size-3.5 shrink-0 text-faint transition-colors group-hover:text-muted" />
-                      )
-                    ) : null}
+                    {trailing}
                   </>
                 );
+                const rowClass =
+                  "group flex h-9 w-full items-center gap-2.5 rounded-[var(--r-card)] border border-line bg-surface px-2.5 text-left transition-colors duration-[var(--dur-1)] hover:border-line-strong hover:bg-surface-2";
                 return (
                   <li key={link.id}>
-                    {href ? (
-                      <a
-                        href={href}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="group flex h-9 items-center gap-2.5 rounded-[var(--r-card)] border border-line bg-surface px-2.5 transition-colors duration-[var(--dur-1)] hover:border-line-strong hover:bg-surface-2"
-                      >
-                        {inner}
-                      </a>
-                    ) : (
+                    {!href ? (
                       <div
                         title="This link's address isn't safe to open."
                         className="flex h-9 items-center gap-2.5 rounded-[var(--r-card)] border border-line bg-surface px-2.5 opacity-70"
                       >
                         {inner}
                       </div>
+                    ) : inApp ? (
+                      <button type="button" onClick={() => setViewerIndex(idx)} className={rowClass}>
+                        {inner}
+                      </button>
+                    ) : (
+                      <a href={href} target="_blank" rel="noopener noreferrer" className={rowClass}>
+                        {inner}
+                      </a>
                     )}
                   </li>
                 );
@@ -783,6 +795,13 @@ export function TaskPanel({
             </ul>
           </section>
         )}
+
+        <MaterialViewer
+          links={task.links}
+          index={viewerIndex}
+          onIndex={setViewerIndex}
+          onClose={() => setViewerIndex(null)}
+        />
 
         {/* admin quick actions */}
         {isAdmin && (

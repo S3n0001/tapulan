@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type ReactNode } from "react";
+import { useMemo, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -41,6 +41,7 @@ import {
 import { accentStyle } from "@/lib/domain/hues";
 import { useNow } from "@/hooks/use-now";
 import { useDone } from "@/hooks/use-done";
+import { usePrefs } from "@/hooks/use-prefs";
 import { cn } from "@/lib/utils";
 import { ViewChrome } from "@/components/shell/view-chrome";
 import { HueBadge, InfoFlag, WarnFlag } from "@/components/ui/badge";
@@ -123,6 +124,7 @@ export function TodayView({
     <ViewChrome
       title="Today"
       icon={Clock3}
+      flat
       meta={
         <>
           <span className="tnum">{DATE_FMT.format(shownDate)}</span>
@@ -138,8 +140,13 @@ export function TodayView({
       }
     >
 
-      <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_336px]">
-        <section className="min-w-0 lg:border-r lg:border-line">
+      {/* two self-contained cards on the shell void — the 8px gap matches the
+          shell's own panel margin, so the void reads through evenly. flex-1
+          stretches both to equal height, so a light day still rests on a full
+          card rather than a stub. Mobile stacks them in the edge-to-edge panel
+          (a card would be bg-on-bg there), split only by the aside's hairline. */}
+      <div className="flex flex-1 flex-col lg:grid lg:grid-cols-[minmax(0,1fr)_336px] lg:gap-2">
+        <section className="flex min-w-0 flex-col overflow-hidden lg:rounded-[var(--r-panel)] lg:border lg:border-line lg:bg-bg">
           {!isToday && (
             <p className="flex items-center gap-2 border-b border-line bg-surface/50 px-3.5 py-2 text-[12.5px] text-muted lg:px-4">
               <CalendarDays className="size-3.5 shrink-0 text-faint" />
@@ -175,10 +182,14 @@ export function TodayView({
               dueBySubject={dueBySubject}
             />
           )}
+          {/* fill the tail so a short timeline rests on a considered surface —
+              desktop only; on mobile the due rail stacks right below */}
+          <div aria-hidden className="canvas-floor hidden min-h-16 flex-1 lg:block" />
         </section>
 
-        <aside className="border-t border-line lg:border-t-0">
+        <aside className="flex flex-1 flex-col overflow-hidden border-t border-line lg:rounded-[var(--r-panel)] lg:border lg:border-line lg:bg-bg">
           <DueRail tasks={tasks} now={now} />
+          <div aria-hidden className="canvas-floor min-h-16 flex-1" />
         </aside>
       </div>
     </ViewChrome>
@@ -591,7 +602,10 @@ const HORIZONS: Horizon[] = [7, 14, 30];
 function DueRail({ tasks, now }: { tasks: TaskFull[]; now: Date }) {
   const router = useRouter();
   const { isDone, toggle } = useDone();
-  const [horizon, setHorizon] = useState<Horizon>(7);
+  // the due-soon window is a device preference, so it sticks between visits
+  // (and stays in sync with the Settings page) instead of resetting to 7d
+  const { prefs, setPref } = usePrefs();
+  const horizon = prefs.horizon;
 
   // personal "done" is device-local; drop it alongside section done/cancelled
   const active = tasks.filter((t) => isActionable(t) && !isDone(t.id));
@@ -614,7 +628,7 @@ function DueRail({ tasks, now }: { tasks: TaskFull[]; now: Date }) {
             <button
               key={h}
               type="button"
-              onClick={() => setHorizon(h)}
+              onClick={() => setPref("horizon", h)}
               aria-pressed={horizon === h}
               className={cn(
                 "tnum tap rounded-[var(--r-chip)] px-1.5 py-0.5 font-mono text-[10.5px] font-medium transition-colors duration-[var(--dur-1)]",

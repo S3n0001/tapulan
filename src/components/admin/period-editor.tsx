@@ -7,16 +7,17 @@ import type { PeriodFull, PeriodKind, Strand, SubjectFull, Teacher } from "@/lib
 import { DAY_SHORT, inputToMin, minToInput } from "@/lib/domain/time";
 import { Panel } from "@/components/ui/panel";
 import { Button } from "@/components/ui/button";
-import { Field, Input, Select } from "@/components/ui/field";
+import { Field, Input } from "@/components/ui/field";
+import { Select, type SelectOption } from "@/components/ui/select";
 import { Segmented } from "@/components/ui/segmented";
 import { useToast } from "@/components/ui/toast";
 import { useConfirm } from "@/components/ui/confirm";
 
-const KIND_LABEL: Record<PeriodKind, string> = {
-  class: "Class — a subject meets",
-  break: "Break — recess, lunch",
-  fixture: "Fixture — assembly, cleaning, SYG",
-};
+const KIND_OPTIONS: SelectOption<PeriodKind>[] = [
+  { value: "class", label: "Class", hint: "a subject meets" },
+  { value: "break", label: "Break", hint: "recess, lunch" },
+  { value: "fixture", label: "Fixture", hint: "assembly, cleaning, SYG" },
+];
 
 interface FormState {
   day: number;
@@ -192,57 +193,58 @@ export function PeriodEditor({
         </div>
 
         <Field label="Kind" htmlFor="p-kind">
-          <Select
+          <Select<PeriodKind>
             id="p-kind"
+            ariaLabel="Period kind"
+            align="start"
+            className="w-full"
             value={form.kind}
-            onChange={(e) => set("kind", e.target.value as PeriodKind)}
-          >
-            {(Object.keys(KIND_LABEL) as PeriodKind[]).map((k) => (
-              <option key={k} value={k}>
-                {KIND_LABEL[k]}
-              </option>
-            ))}
-          </Select>
+            onChange={(k) => set("kind", k)}
+            options={KIND_OPTIONS}
+          />
         </Field>
 
         {form.kind === "class" ? (
           <>
             <Field label="Subject" required htmlFor="p-subject">
-              <Select
+              <Select<string>
                 id="p-subject"
-                value={form.subjectId}
-                onChange={(e) =>
-                  set("subjectId", e.target.value === "" ? "" : Number(e.target.value))
-                }
-              >
-                <option value="">Pick a subject…</option>
-                {subjects.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.short} — {s.name}
-                    {s.strand ? ` (${s.strand})` : ""}
-                  </option>
-                ))}
-              </Select>
+                ariaLabel="Subject"
+                align="start"
+                className="w-full"
+                value={String(form.subjectId)}
+                onChange={(v) => set("subjectId", v === "" ? "" : Number(v))}
+                options={[
+                  {
+                    value: "",
+                    label: <span className="font-normal text-muted">Pick a subject…</span>,
+                  },
+                  ...subjects.map((s) => ({
+                    value: String(s.id),
+                    label: s.name,
+                    hint: s.strand ? `${s.short} · ${s.strand}` : s.short,
+                    hue: s.hue,
+                  })),
+                ]}
+              />
             </Field>
             <Field
               label="Teacher override"
               hint="only for this meeting — else the subject's teacher"
               htmlFor="p-teacher"
             >
-              <Select
+              <Select<string>
                 id="p-teacher"
-                value={form.teacherId}
-                onChange={(e) =>
-                  set("teacherId", e.target.value === "" ? "" : Number(e.target.value))
-                }
-              >
-                <option value="">Subject&apos;s teacher</option>
-                {teachers.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name}
-                  </option>
-                ))}
-              </Select>
+                ariaLabel="Teacher override"
+                align="start"
+                className="w-full"
+                value={String(form.teacherId)}
+                onChange={(v) => set("teacherId", v === "" ? "" : Number(v))}
+                options={[
+                  { value: "", label: "Subject's teacher" },
+                  ...teachers.map((t) => ({ value: String(t.id), label: t.name })),
+                ]}
+              />
             </Field>
           </>
         ) : (
@@ -257,14 +259,25 @@ export function PeriodEditor({
         )}
 
         <Field label="Strand" hint="empty = every strand attends" htmlFor="p-strand">
-          <Select id="p-strand" value={form.strand} onChange={(e) => set("strand", e.target.value)}>
-            <option value="">All strands</option>
-            {strands.map((s) => (
-              <option key={s.code} value={s.code}>
-                {s.code} only
-              </option>
-            ))}
-          </Select>
+          <Select<string>
+            id="p-strand"
+            ariaLabel="Strand"
+            align="start"
+            className="w-full"
+            value={form.strand}
+            onChange={(v) => set("strand", v)}
+            options={[
+              { value: "", label: "All strands" },
+              ...strands.map((s) => ({
+                value: s.code,
+                label: (
+                  <span className="font-mono text-[12.5px] font-semibold">{s.code}</span>
+                ),
+                hint: `${s.name} only`,
+                hue: s.hue,
+              })),
+            ]}
+          />
         </Field>
       </div>
     </Panel>

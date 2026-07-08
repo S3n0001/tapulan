@@ -13,7 +13,7 @@ import {
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
-import { Layers, Lock, Search, SunMoon } from "lucide-react";
+import { Layers, Lock, Moon, Search, SlidersHorizontal, Sun, SunMoon, Sunset } from "lucide-react";
 import { setStrand } from "@/actions/session";
 import type { Strand, StrandCode } from "@/lib/domain/types";
 import { accentStyle } from "@/lib/domain/hues";
@@ -22,8 +22,10 @@ import { cn } from "@/lib/utils";
 import { usePresence } from "@/hooks/use-presence";
 import { Kbd } from "@/components/ui/kbd";
 import { useClassDetail } from "@/components/classes/class-detail";
+import { openSettings } from "@/components/settings/settings-modal";
 import { useIsAdmin } from "./admin-context";
 import { NAV } from "./nav";
+import { cycleTheme } from "./theme-toggle";
 
 /** Anything in the shell can summon the palette without prop plumbing. */
 const OPEN_EVENT = "tapulan:cmdk";
@@ -153,6 +155,16 @@ export function CommandPalette({
         run: () => router.push(n.href),
       });
     }
+    if (matches(query, "settings preferences theme")) {
+      list.push({
+        id: "nav-settings",
+        section: "Go to",
+        label: "Settings",
+        icon: <SlidersHorizontal className="size-4" />,
+        run: () => openSettings(),
+      });
+    }
+
     // admin stays out of students' sight: listed for signed-in admins, or
     // only once someone deliberately types it
     if (isAdmin || (query.trim().length >= 2 && matches(query, "admin"))) {
@@ -188,15 +200,35 @@ export function CommandPalette({
       });
     }
 
-    if (matches(query, "toggle theme light dark")) {
+    // theme: the empty palette keeps a single quiet cycle row; a typed query
+    // surfaces direct commands instead (searching "sepia" should set sepia,
+    // not spin a carousel).
+    if (!query.trim()) {
       list.push({
         id: "theme",
         section: "Theme",
-        label: "Toggle light / dark",
+        label: "Switch theme",
+        hint: "light · dark · sepia",
         icon: <SunMoon className="size-4" />,
-        run: () =>
-          setTheme(document.documentElement.classList.contains("dark") ? "light" : "dark"),
+        run: () => cycleTheme(setTheme),
       });
+    } else {
+      const themeCommands = [
+        { id: "theme-light", label: "Light mode", theme: "light", icon: <Sun className="size-4" /> },
+        { id: "theme-dark", label: "Dark mode", theme: "dark", icon: <Moon className="size-4" /> },
+        { id: "theme-sepia", label: "Sepia mode", theme: "sepia", icon: <Sunset className="size-4" /> },
+        { id: "theme-system", label: "System theme", theme: "system", icon: <SunMoon className="size-4" /> },
+      ];
+      for (const t of themeCommands) {
+        if (!matches(query, `theme appearance ${t.label}`)) continue;
+        list.push({
+          id: t.id,
+          section: "Theme",
+          label: t.label,
+          icon: t.icon,
+          run: () => setTheme(t.theme),
+        });
+      }
     }
 
     // empty palette peeks at what's due soon; a query switches to full search

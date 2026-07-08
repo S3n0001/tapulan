@@ -13,8 +13,22 @@ export function usePresence(open: boolean, ms = 180) {
   useEffect(() => {
     if (open) {
       setMounted(true);
-      const r = requestAnimationFrame(() => setState("open"));
-      return () => cancelAnimationFrame(r);
+      // rAF lets the browser paint one "closed" frame first so the open
+      // animation actually triggers — but rAF never fires in a hidden tab
+      // (background tab, headless run), so a timeout backstop guarantees the
+      // surface still opens there; whichever fires first wins
+      let done = false;
+      const commit = () => {
+        if (done) return;
+        done = true;
+        setState("open");
+      };
+      const r = requestAnimationFrame(commit);
+      const t = setTimeout(commit, 50);
+      return () => {
+        cancelAnimationFrame(r);
+        clearTimeout(t);
+      };
     }
     setState("closed");
     const t = setTimeout(() => setMounted(false), ms);

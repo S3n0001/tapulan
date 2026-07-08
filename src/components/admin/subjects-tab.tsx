@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { BookPlus, Plus, UserPlus } from "lucide-react";
 import type { Strand, SubjectFull, Teacher } from "@/lib/domain/types";
 import { accentStyle } from "@/lib/domain/hues";
+import { useRetained } from "@/hooks/use-retained";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty";
 import { SubjectEditor } from "./subject-editor";
@@ -20,6 +21,10 @@ export function SubjectsTab({
 }) {
   const [editingSubject, setEditingSubject] = useState<SubjectFull | "new" | null>(null);
   const [editingTeacher, setEditingTeacher] = useState<Teacher | "new" | null>(null);
+  // retained through the close so each panel's exit animation plays with its
+  // last-edited record still on it
+  const shownSubject = useRetained(editingSubject);
+  const shownTeacher = useRetained(editingTeacher);
 
   const subjectCountByTeacher = useMemo(() => {
     const map = new Map<number, number>();
@@ -130,22 +135,18 @@ export function SubjectsTab({
         </ul>
       )}
 
-      {editingSubject !== null && (
-        <SubjectEditor
-          subject={editingSubject === "new" ? null : editingSubject}
-          teachers={teachers}
-          strands={strands}
-          open
-          onClose={() => setEditingSubject(null)}
-        />
-      )}
-      {editingTeacher !== null && (
-        <TeacherEditor
-          teacher={editingTeacher === "new" ? null : editingTeacher}
-          open
-          onClose={() => setEditingTeacher(null)}
-        />
-      )}
+      <SubjectEditor
+        subject={shownSubject === null || shownSubject === "new" ? null : shownSubject}
+        teachers={teachers}
+        strands={strands}
+        open={editingSubject !== null}
+        onClose={() => setEditingSubject(null)}
+      />
+      <TeacherEditor
+        teacher={shownTeacher === null || shownTeacher === "new" ? null : shownTeacher}
+        open={editingTeacher !== null}
+        onClose={() => setEditingTeacher(null)}
+      />
     </div>
   );
 }

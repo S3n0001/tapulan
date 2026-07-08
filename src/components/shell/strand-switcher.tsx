@@ -106,7 +106,7 @@ export function StrandSwitcher({
     <Menu width={264} className="block w-full" trigger={
       <button
         type="button"
-        className="group flex h-10 w-full items-center gap-2.5 rounded-[7px] px-2 text-left transition-[transform,background-color,border-color] duration-[var(--dur-1)] hover:bg-surface active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color-mix(in_oklab,var(--ring)_50%,transparent)]"
+        className="group flex h-10 w-full items-center gap-2.5 rounded-[7px] pl-2 pr-10 text-left transition-[transform,background-color,border-color] duration-[var(--dur-1)] hover:bg-surface active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color-mix(in_oklab,var(--ring)_50%,transparent)]"
       >
         {pending && <Spinner className="size-3 shrink-0 text-muted" />}
         <span className="min-w-0 flex-1">

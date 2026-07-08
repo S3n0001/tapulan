@@ -8,10 +8,8 @@ import {
   type InputHTMLAttributes,
   type ReactElement,
   type ReactNode,
-  type SelectHTMLAttributes,
   type TextareaHTMLAttributes,
 } from "react";
-import { Check, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export function Field({
@@ -87,23 +85,12 @@ export const Textarea = forwardRef<
   );
 });
 
-export const Select = forwardRef<HTMLSelectElement, SelectHTMLAttributes<HTMLSelectElement>>(
-  function Select({ className, children, ...rest }, ref) {
-    return (
-      <span className="relative block">
-        <select ref={ref} className={cn(CONTROL, "h-8 appearance-none pr-8", className)} {...rest}>
-          {children}
-        </select>
-        <ChevronDown
-          aria-hidden
-          className="pointer-events-none absolute right-2 top-1/2 size-3.5 -translate-y-1/2 text-faint"
-        />
-      </span>
-    );
-  }
-);
-
-/** Custom brand-accented checkbox with a clickable label. */
+/**
+ * Custom brand-accented checkbox with a clickable label. Same physical
+ * vocabulary as the personal done-check: the box pops (done-pop) and the
+ * tick draws itself in (done-tick) when set; hovering the label previews a
+ * faint tick so the affordance reads before the click.
+ */
 export function Checkbox({
   checked,
   onChange,
@@ -118,7 +105,7 @@ export function Checkbox({
   return (
     <label
       className={cn(
-        "inline-flex cursor-pointer select-none items-center gap-2 text-[12.5px] text-muted transition-colors hover:text-ink",
+        "group inline-flex cursor-pointer select-none items-center gap-2 text-[12.5px] text-muted transition-colors hover:text-ink",
         className
       )}
     >
@@ -131,9 +118,24 @@ export function Checkbox({
         />
         <span
           aria-hidden
-          className="flex size-3.5 shrink-0 items-center justify-center rounded-[4px] border border-line-strong bg-surface transition-colors duration-[var(--dur-1)] peer-checked:border-brand peer-checked:bg-brand peer-focus-visible:ring-2 peer-focus-visible:ring-[color-mix(in_oklab,var(--ring)_55%,transparent)]"
+          className={cn(
+            "flex size-3.5 shrink-0 items-center justify-center rounded-[4px] border transition-colors duration-[var(--dur-1)] peer-focus-visible:ring-2 peer-focus-visible:ring-[color-mix(in_oklab,var(--ring)_55%,transparent)]",
+            checked
+              ? "done-pop border-brand bg-brand text-white"
+              : "border-line-strong bg-surface text-transparent group-hover:border-brand group-hover:text-[color-mix(in_oklab,var(--brand)_40%,transparent)]"
+          )}
         >
-          {checked && <Check className="size-2.5 text-white" strokeWidth={3} />}
+          <svg viewBox="0 0 12 12" className="size-2.5">
+            <path
+              d="M2.5 6.5 5 8.75 9.5 3.5"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.4"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className={checked ? "done-tick" : undefined}
+            />
+          </svg>
         </span>
       </span>
       {label}

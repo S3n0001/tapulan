@@ -1,7 +1,15 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { CalendarPlus, CalendarRange, ChevronLeft, ChevronRight } from "lucide-react";
+import {
+  CalendarCheck,
+  CalendarPlus,
+  CalendarRange,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  Plus,
+} from "lucide-react";
 import type {
   DayMark,
   PeriodFull,
@@ -32,6 +40,7 @@ import { DAY_MARK_HUE, DAY_MARK_SHORT, dayMarkTitle } from "@/lib/domain/day-mar
 import { useNow } from "@/hooks/use-now";
 import { useDone } from "@/hooks/use-done";
 import { usePresence } from "@/hooks/use-presence";
+import { useRetained } from "@/hooks/use-retained";
 import { cn } from "@/lib/utils";
 import { ViewChrome } from "@/components/shell/view-chrome";
 import { useIsAdmin } from "@/components/shell/admin-context";
@@ -129,16 +138,31 @@ export function CalendarView({
 
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [editing, setEditing] = useState<TaskFull | null>(null);
+  // admin quick-add — the ISO date a new task should be born due on
+  const [creating, setCreating] = useState<string | null>(null);
+  // edit + quick-add retained as one session so the editor keeps its content
+  // (and its key) while the close animation plays
+  const editorSession = useRetained(
+    editing !== null || creating !== null ? { task: editing, date: creating } : null
+  );
 
   // the day the mobile agenda shows — today when visible, else the 1st
   const [dayISO, setDayISO] = useState<string>(() =>
     todayISO.slice(0, 7) === key ? todayISO : `${key}-01`
   );
 
-  // per-day overflow popover (desktop)
+  // per-day peek popover (desktop) — any day number or "+n more" opens it
   const [pop, setPop] = useState<{ iso: string; left: number; top: number } | null>(null);
   const [popOpen, setPopOpen] = useState(false);
   const popRestore = useRef<HTMLElement | null>(null);
+
+  // the month jumper (mini calendar) anchored to the toolbar's month label
+  const [mini, setMini] = useState<{ left: number; top: number } | null>(null);
+  const [miniOpen, setMiniOpen] = useState(false);
+
+  // a day picked in the jumper — consumed by the month-change reset so the
+  // mobile agenda lands on that exact day, not the default 1st/today
+  const jumpDay = useRef<string | null>(null);
 
   // keep ?m= shareable without a server roundtrip per page
   useEffect(() => {
@@ -149,13 +173,22 @@ export function CalendarView({
     window.history.replaceState(window.history.state, "", url);
   }, [key, nowKey]);
 
-  // paging months resets the popover and the mobile day selection
+  // paging months resets the popover and the mobile day selection — unless
+  // the jumper picked a specific day, which wins
   const prevKey = useRef(key);
   useEffect(() => {
     if (prevKey.current === key) return;
     prevKey.current = key;
     setPopOpen(false);
-    setDayISO(todayISO.slice(0, 7) === key ? todayISO : `${key}-01`);
+    const jump = jumpDay.current;
+    jumpDay.current = null;
+    setDayISO(
+      jump?.startsWith(key)
+        ? jump
+        : todayISO.slice(0, 7) === key
+          ? todayISO
+          : `${key}-01`
+    );
   }, [key, todayISO]);
 
   const byDate = useMemo(() => {
@@ -208,6 +241,64 @@ export function CalendarView({
     setMonth(target);
   };
   const slide = { "--month-dir": dir.current < 0 ? "-10px" : "10px" } as React.CSSProperties;
+
+  // one click (or T) home from any month
+  const goToday = () => goToMonth(startOfMonth(now));
+
+  // a day picked in the jumper: land the canvas on its month and, on mobile,
+  // its agenda — same-month picks just move the agenda day
+  const pickDate = (iso: string) => {
+    setMiniOpen(false);
+    if (iso.startsWith(key)) {
+      setDayISO(iso);
+      return;
+    }
+    jumpDay.current = iso;
+    goToMonth(fromISODate(`${iso.slice(0, 7)}-01`));
+  };
+
+  // calendar keys — ← / → page months, T jumps to today. Silent while typing
+  // or while any overlay owns the keyboard.
+  useEffect(() => {
+    const overlayOpen =
+      selectedId !== null || editing !== null || creating !== null || popOpen || miniOpen;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey || overlayOpen) return;
+      const el = e.target as HTMLElement | null;
+      if (
+        el &&
+        (el.tagName === "INPUT" ||
+          el.tagName === "TEXTAREA" ||
+          el.tagName === "SELECT" ||
+          el.isContentEditable)
+      )
+        return;
+      if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        page(-1);
+      } else if (e.key === "ArrowRight") {
+        e.preventDefault();
+        page(1);
+      } else if (e.key === "t" || e.key === "T") {
+        e.preventDefault();
+        goToday();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedId, editing, creating, popOpen, miniOpen, key, now]);
+
+  // day → open-work signal for the jumper's density dots (overdue wins)
+  const openDayMap = useMemo(() => {
+    const map = new Map<string, "open" | "late">();
+    for (const t of tasks) {
+      if (!isActionable(t) || isDone(t.id)) continue;
+      if (isPastDue(t.dueDate, dueMinOf(t), now)) map.set(t.dueDate, "late");
+      else if (!map.has(t.dueDate)) map.set(t.dueDate, "open");
+    }
+    return map;
+  }, [tasks, isDone, now]);
 
   // toolbar meta — open work in the labeled month, split honest/overdue
   const { dueCount, lateCount } = useMemo(() => {
@@ -280,15 +371,17 @@ export function CalendarView({
       </a>
       <span className="h-4 w-px bg-line-strong" aria-hidden />
       <div className="flex items-center gap-0.5">
-        {key !== nowKey && (
-          <button
-            type="button"
-            onClick={() => goToMonth(startOfMonth(now))}
-            className="tap mr-1 rounded-[var(--r-chip)] px-2 py-1 font-mono text-[11px] font-medium text-faint transition-colors hover:text-ink"
-          >
-            This month
-          </button>
-        )}
+        <button
+          type="button"
+          onClick={goToday}
+          title="Jump to the current month (T)"
+          className={cn(
+            "tap mr-1 rounded-[var(--r-chip)] px-2 py-1 font-mono text-[11px] font-medium transition-colors",
+            key === nowKey ? "text-faint/70" : "text-faint hover:text-ink"
+          )}
+        >
+          Today
+        </button>
         <button
           type="button"
           aria-label="Previous month"
@@ -319,7 +412,42 @@ export function CalendarView({
       icon={CalendarRange}
       meta={
         <>
-          <span className="tnum font-medium text-ink">{fmtMonthYear(month)}</span>
+          <button
+            type="button"
+            data-mini-trigger
+            onClick={(e) => {
+              if (miniOpen) {
+                setMiniOpen(false);
+                return;
+              }
+              const r = e.currentTarget.getBoundingClientRect();
+              setMini({
+                left: Math.max(8, Math.min(r.left - 8, window.innerWidth - 264)),
+                top: Math.max(8, Math.min(r.bottom + 6, window.innerHeight - 336)),
+              });
+              setMiniOpen(true);
+            }}
+            aria-haspopup="dialog"
+            aria-expanded={miniOpen}
+            title="Jump to a month"
+            className={cn(
+              "tap group/mini flex h-7 items-center gap-1 rounded-[var(--r-chip)] border pl-3 pr-2 transition-colors",
+              miniOpen
+                ? "border-line-strong bg-surface-2"
+                : "border-line bg-surface hover:border-line-strong hover:bg-surface-2"
+            )}
+          >
+            <span className="tnum text-[13px] font-semibold tracking-[-0.01em] text-ink">
+              {fmtMonthYear(month)}
+            </span>
+            <ChevronDown
+              aria-hidden
+              className={cn(
+                "size-3.5 text-faint transition-transform duration-[var(--dur-1)] group-hover/mini:text-muted",
+                miniOpen && "rotate-180 text-muted"
+              )}
+            />
+          </button>
           <span className="tnum">{dueCount} due</span>
           {lateCount > 0 && <span className="tnum text-danger-text">{lateCount} overdue</span>}
         </>
@@ -335,7 +463,7 @@ export function CalendarView({
               key={w}
               className={cn(
                 "flex h-8 items-center px-2 font-mono text-[10px] font-semibold uppercase tracking-[0.08em]",
-                i > 0 && "border-l border-line/60",
+                i > 0 && "border-l border-line",
                 i === todayCol
                   ? "text-brand-text"
                   : i >= 5
@@ -351,7 +479,7 @@ export function CalendarView({
         <div
           ref={gridRef}
           key={key}
-          className="anim-month grid min-h-[500px] flex-1 grid-cols-7"
+          className="anim-month grid min-h-[480px] flex-1 grid-cols-7"
           style={{ gridTemplateRows: `repeat(${weeks}, minmax(0, 1fr))`, ...slide }}
         >
           {days.map((d, i) => (
@@ -363,16 +491,17 @@ export function CalendarView({
               now={now}
               isDone={isDone}
               onOpenTask={openTask}
-              onMore={openPop}
+              onPeek={openPop}
+              onCreate={isAdmin ? setCreating : undefined}
             />
           ))}
         </div>
       </div>
 
       {/* ------------------------------------------------ mobile month + day */}
-      <div className="lg:hidden">
+      <div className="flex flex-1 flex-col lg:hidden">
         <div
-          className="overflow-hidden border-b border-line px-2 pb-1.5 pt-2"
+          className="shrink-0 overflow-hidden border-b border-line px-2 pb-1.5 pt-2"
           onTouchStart={onTouchStart}
           onTouchEnd={onTouchEnd}
         >
@@ -405,8 +534,8 @@ export function CalendarView({
         </div>
 
         {selectedDay && (
-          <section key={dayISO} className="anim-fade">
-            <div className="flex h-8 items-center gap-2 border-b border-line/70 bg-[color-mix(in_oklab,var(--surface)_45%,var(--bg))] px-3.5">
+          <section key={dayISO} className="anim-fade flex flex-1 flex-col">
+            <div className="flex h-8 shrink-0 items-center gap-2 border-b border-line/70 bg-[color-mix(in_oklab,var(--surface)_45%,var(--bg))] px-3.5">
               <h3 className="tnum font-mono text-[10.5px] font-semibold uppercase tracking-[0.06em] text-muted">
                 {fmtDateMed(selectedDay.iso)}
               </h3>
@@ -436,26 +565,33 @@ export function CalendarView({
             )}
 
             {agendaTasks.length === 0 ? (
-              <p className="px-3.5 py-8 text-center text-[12px] text-faint">
-                {selectedDay.mark?.kind === "no_class"
-                  ? "No class — nothing due this day."
-                  : "Nothing due this day."}
-              </p>
+              <div className="canvas-floor flex flex-1 flex-col items-center justify-center gap-2.5 px-6 py-12 text-center">
+                <CalendarCheck className="size-5 text-faint" strokeWidth={1.75} aria-hidden />
+                <p className="text-[12.5px] text-muted">
+                  {selectedDay.mark?.kind === "no_class"
+                    ? "No class — you're all caught up."
+                    : "Nothing due this day."}
+                </p>
+              </div>
             ) : (
-              <ul className="divide-y divide-line/80">
-                {agendaTasks.map((t) => (
-                  <li key={t.id}>
-                    <TaskListRow
-                      task={t}
-                      now={now}
-                      done={isDone(t.id)}
-                      selected={t.id === selectedId}
-                      onToggleDone={() => toggle(t.id)}
-                      onOpen={() => openTask(t.id)}
-                    />
-                  </li>
-                ))}
-              </ul>
+              <>
+                <ul className="divide-y divide-line/80">
+                  {agendaTasks.map((t) => (
+                    <li key={t.id}>
+                      <TaskListRow
+                        task={t}
+                        now={now}
+                        done={isDone(t.id)}
+                        selected={t.id === selectedId}
+                        onToggleDone={() => toggle(t.id)}
+                        onOpen={() => openTask(t.id)}
+                      />
+                    </li>
+                  ))}
+                </ul>
+                {/* fill the tail so a light day rests on a considered surface */}
+                <div aria-hidden className="canvas-floor min-h-16 flex-1" />
+              </>
             )}
           </section>
         )}
@@ -475,6 +611,17 @@ export function CalendarView({
         }}
       />
 
+      <MiniMonthPopover
+        open={miniOpen}
+        left={mini?.left ?? 0}
+        top={mini?.top ?? 0}
+        month={month}
+        todayISO={todayISO}
+        signals={openDayMap}
+        onPick={pickDate}
+        onClose={() => setMiniOpen(false)}
+      />
+
       <TaskPanel
         task={selected}
         open={selected !== null}
@@ -490,14 +637,19 @@ export function CalendarView({
         types={types}
       />
 
-      {isAdmin && editing !== null && (
+      {isAdmin && editorSession && (
         <TaskEditor
-          task={editing}
+          key={editorSession.task ? `edit-${editorSession.task.id}` : `new-${editorSession.date}`}
+          task={editorSession.task}
+          initialDate={editorSession.date ?? undefined}
           subjects={subjects}
           types={types}
           periods={periods}
-          open
-          onClose={() => setEditing(null)}
+          open={editing !== null || creating !== null}
+          onClose={() => {
+            setEditing(null);
+            setCreating(null);
+          }}
         />
       )}
     </ViewChrome>
@@ -513,7 +665,8 @@ function DayCell({
   now,
   isDone,
   onOpenTask,
-  onMore,
+  onPeek,
+  onCreate,
 }: {
   d: MonthDay;
   topRow: boolean;
@@ -521,7 +674,10 @@ function DayCell({
   now: Date;
   isDone: (id: number) => boolean;
   onOpenTask: (id: number) => void;
-  onMore: (iso: string, e: React.MouseEvent<HTMLButtonElement>) => void;
+  /** opens the day popover — fed by the date button and "+n more" alike */
+  onPeek: (iso: string, e: React.MouseEvent<HTMLButtonElement>) => void;
+  /** admin only — quick-add a task born due on this day */
+  onCreate?: (iso: string) => void;
 }) {
   const ordered = orderDay(d.tasks, isDone);
   const taskUnits = Math.max(0, units - (d.mark ? 1 : 0));
@@ -536,9 +692,9 @@ function DayCell({
   return (
     <div
       className={cn(
-        "relative flex min-w-0 flex-col overflow-hidden",
-        topRow ? "border-t-0" : "border-t border-line/60",
-        d.col > 0 && "border-l border-line/60",
+        "group/cell relative flex min-w-0 flex-col overflow-hidden",
+        topRow ? "border-t-0" : "border-t border-line",
+        d.col > 0 && "border-l border-line",
         d.weekend && "bg-shell/45",
         d.isToday && "bg-[color-mix(in_oklab,var(--brand)_8%,transparent)]"
       )}
@@ -555,20 +711,33 @@ function DayCell({
         />
       )}
 
-      <div className="relative flex h-6 shrink-0 items-center px-2 pt-1">
-        {d.isToday ? (
-          <span className="tnum grid size-5 place-items-center rounded-full bg-brand font-mono text-[10.5px] font-semibold leading-none text-on-brand">
-            {d.dateNum}
-          </span>
-        ) : (
-          <span
-            className={cn(
-              "tnum font-mono text-[11px] font-medium leading-none",
-              !d.inMonth ? "text-muted" : d.past ? "text-faint" : "text-muted"
-            )}
+      <div className="relative flex h-6 shrink-0 items-center justify-between gap-1 pl-1.5 pr-1 pt-1">
+        <button
+          type="button"
+          onClick={(e) => onPeek(d.iso, e)}
+          aria-label={`Peek at ${fmtDateLong(d.iso)}`}
+          className={cn(
+            "tap tnum flex h-5 min-w-5 items-center justify-center rounded-full px-1 font-mono leading-none transition-colors",
+            d.isToday
+              ? "bg-brand text-[10.5px] font-semibold text-on-brand hover:bg-brand-hover"
+              : cn(
+                  "text-[11px] font-medium hover:bg-surface-2 hover:text-ink",
+                  !d.inMonth ? "text-muted" : d.past ? "text-faint" : "text-muted"
+                )
+          )}
+        >
+          {d.isToday ? d.dateNum : d.dateNum === 1 ? fmtDateShort(d.iso) : d.dateNum}
+        </button>
+        {onCreate && (
+          <button
+            type="button"
+            onClick={() => onCreate(d.iso)}
+            aria-label={`New task due ${fmtDateLong(d.iso)}`}
+            title="New task due this day"
+            className="tap grid size-5 shrink-0 place-items-center rounded-full text-faint opacity-0 transition-opacity hover:bg-surface-2 hover:text-ink focus-visible:opacity-100 group-hover/cell:opacity-100"
           >
-            {d.dateNum === 1 ? fmtDateShort(d.iso) : d.dateNum}
-          </span>
+            <Plus className="size-3.5" strokeWidth={2} aria-hidden />
+          </button>
         )}
       </div>
 
@@ -599,7 +768,7 @@ function DayCell({
         {hidden > 0 && (
           <button
             type="button"
-            onClick={(e) => onMore(d.iso, e)}
+            onClick={(e) => onPeek(d.iso, e)}
             aria-label={`Show all ${ordered.length} due ${fmtDateLong(d.iso)}`}
             className={cn(
               "tap flex h-[18px] shrink-0 items-center rounded-[3px] px-1 text-left font-mono text-[9.5px] font-medium transition-colors hover:bg-surface-2",
@@ -795,6 +964,183 @@ function MiniDay({
   );
 }
 
+/* ------------------------------------------------------ month jumper */
+
+/**
+ * The mini calendar — Google Calendar's sidebar month, folded into a popover
+ * on the toolbar's month label. Pages by month independently of the canvas;
+ * density dots mark days with open work (danger = something overdue); any
+ * day is one click from its month, and on mobile from its agenda.
+ */
+function MiniMonthPopover({
+  open,
+  left,
+  top,
+  month,
+  todayISO,
+  signals,
+  onPick,
+  onClose,
+}: {
+  open: boolean;
+  left: number;
+  top: number;
+  /** the month the big canvas currently shows — the jumper opens here */
+  month: Date;
+  todayISO: string;
+  /** day → open-work signal for the density dots */
+  signals: Map<string, "open" | "late">;
+  onPick: (iso: string) => void;
+  onClose: () => void;
+}) {
+  const { mounted, state } = usePresence(open);
+  const ref = useRef<HTMLDivElement>(null);
+  const restoreRef = useRef<HTMLElement | null>(null);
+  const [cursor, setCursor] = useState<Date>(() => startOfMonth(month));
+
+  // re-anchor to the canvas month each time the jumper opens
+  useEffect(() => {
+    if (open) setCursor(startOfMonth(month));
+    // intentional: month is read once per open, not tracked while open
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    restoreRef.current = document.activeElement as HTMLElement | null;
+    ref.current?.focus({ preventScroll: true });
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      e.stopPropagation();
+      onClose();
+    };
+    // the trigger toggles itself — swallowing its pointerdown here would
+    // close-then-reopen on every click
+    const onDown = (e: PointerEvent) => {
+      const t = e.target as HTMLElement;
+      if (ref.current && !ref.current.contains(t) && !t.closest("[data-mini-trigger]")) onClose();
+    };
+    const onResize = () => onClose();
+    document.addEventListener("keydown", onKey, true);
+    document.addEventListener("pointerdown", onDown);
+    window.addEventListener("resize", onResize);
+    return () => {
+      document.removeEventListener("keydown", onKey, true);
+      document.removeEventListener("pointerdown", onDown);
+      window.removeEventListener("resize", onResize);
+      restoreRef.current?.focus?.({ preventScroll: true });
+    };
+  }, [open, onClose]);
+
+  if (!mounted) return null;
+
+  const cursorKey = monthKeyOf(cursor);
+  const lead = (cursor.getDay() + 6) % 7;
+  const start = addDays(cursor, -lead);
+  // fixed six weeks so paging never resizes the popover
+  const cells = Array.from({ length: 42 }, (_, i) => {
+    const date = addDays(start, i);
+    const iso = toISODate(date);
+    return { iso, num: date.getDate(), inMonth: iso.startsWith(cursorKey) };
+  });
+
+  return (
+    <div
+      ref={ref}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Jump to a month"
+      tabIndex={-1}
+      data-state={state}
+      style={{ left, top }}
+      className="anim-pop fixed z-30 w-[256px] overflow-hidden rounded-[var(--r-panel)] border border-line bg-pop shadow-[var(--shadow-pop)] outline-none"
+    >
+      <div className="flex items-center gap-0.5 border-b border-line py-1.5 pl-3 pr-1.5">
+        <span aria-live="polite" className="tnum font-mono text-[11.5px] font-semibold text-ink">
+          {fmtMonthYear(cursor)}
+        </span>
+        <button
+          type="button"
+          aria-label="Previous month"
+          onClick={() => setCursor((c) => addMonths(c, -1))}
+          className="tap ml-auto grid size-6 place-items-center rounded-[var(--r-control)] text-muted transition-[color,background-color] hover:bg-surface-2 hover:text-ink"
+        >
+          <ChevronLeft className="size-3.5" />
+        </button>
+        <button
+          type="button"
+          aria-label="Next month"
+          onClick={() => setCursor((c) => addMonths(c, 1))}
+          className="tap grid size-6 place-items-center rounded-[var(--r-control)] text-muted transition-[color,background-color] hover:bg-surface-2 hover:text-ink"
+        >
+          <ChevronRight className="size-3.5" />
+        </button>
+      </div>
+
+      <div className="grid grid-cols-7 px-2 pt-1.5">
+        {WEEK_LETTERS.map((l, i) => (
+          <span
+            key={i}
+            aria-hidden
+            className={cn(
+              "pb-1 text-center font-mono text-[9px] font-semibold uppercase",
+              i >= 5 ? "text-muted" : "text-faint"
+            )}
+          >
+            {l}
+          </span>
+        ))}
+      </div>
+
+      <div key={cursorKey} className="anim-fade grid grid-cols-7 gap-y-[2px] px-2 pb-2">
+        {cells.map((c) => {
+          const isToday = c.iso === todayISO;
+          const signal = signals.get(c.iso);
+          return (
+            <button
+              key={c.iso}
+              type="button"
+              onClick={() => onPick(c.iso)}
+              aria-label={`Go to ${fmtDateLong(c.iso)}${
+                signal ? (signal === "late" ? ", overdue work" : ", work due") : ""
+              }`}
+              aria-current={isToday ? "date" : undefined}
+              className={cn(
+                "tap tnum relative grid size-8 place-items-center justify-self-center rounded-full font-mono text-[11px] leading-none transition-colors",
+                isToday
+                  ? "bg-brand font-semibold text-on-brand hover:bg-brand-hover"
+                  : cn(
+                      "hover:bg-surface-2 hover:text-ink",
+                      c.inMonth ? "font-medium text-muted" : "text-faint"
+                    )
+              )}
+            >
+              {c.num}
+              {signal && (
+                <span
+                  aria-hidden
+                  className={cn(
+                    "absolute bottom-[3px] left-1/2 size-[3px] -translate-x-1/2 rounded-full",
+                    isToday ? "bg-on-brand/80" : signal === "late" ? "bg-danger" : "bg-faint"
+                  )}
+                />
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      <button
+        type="button"
+        onClick={() => onPick(todayISO)}
+        className="tap flex h-8 w-full items-center justify-center gap-1.5 border-t border-line font-mono text-[11px] font-medium text-brand-text transition-colors hover:bg-surface-2"
+      >
+        Today · {fmtDateMed(todayISO)}
+      </button>
+    </div>
+  );
+}
+
 /* ----------------------------------------------------------- day popover */
 
 /**
@@ -867,9 +1213,12 @@ function DayPopover({
     >
       <div className="flex items-baseline gap-2 border-b border-line px-3 py-2">
         <span className="text-[12.5px] font-semibold text-ink">{fmtDateLong(day.iso)}</span>
-        <span className="tnum ml-auto font-mono text-[10.5px] text-faint">
-          {ordered.length} due
-        </span>
+        <span className="font-mono text-[10.5px] text-faint">{relDay(day.iso, now)}</span>
+        {ordered.length > 0 && (
+          <span className="tnum ml-auto font-mono text-[10.5px] text-faint">
+            {ordered.length} due
+          </span>
+        )}
       </div>
 
       <div className="max-h-[336px] overflow-y-auto p-1.5">

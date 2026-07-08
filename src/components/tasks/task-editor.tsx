@@ -10,7 +10,6 @@ import {
   type TaskLinkInput,
 } from "@/actions/tasks";
 import type { PeriodFull, SubjectFull, TaskFull, TaskStatus, TaskType } from "@/lib/domain/types";
-import { TASK_STATUSES } from "@/lib/domain/types";
 import { classMeetingFor } from "@/lib/domain/schedule";
 import {
   fmtDateMed,
@@ -35,15 +34,16 @@ import { cn } from "@/lib/utils";
 import { Panel } from "@/components/ui/panel";
 import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
-import { Checkbox, Field, Input, Select, Textarea } from "@/components/ui/field";
+import { Checkbox, Field, Input, Textarea } from "@/components/ui/field";
+import { Select } from "@/components/ui/select";
 import { useToast } from "@/components/ui/toast";
 
-const STATUS_LABEL: Record<TaskStatus, string> = {
-  confirmed: "Confirmed",
-  tentative: "Tentative — not yet confirmed",
-  done: "Done",
-  cancelled: "Cancelled",
-};
+const STATUS_OPTIONS: { value: TaskStatus; label: string; hint?: string }[] = [
+  { value: "confirmed", label: "Confirmed" },
+  { value: "tentative", label: "Tentative", hint: "not yet confirmed" },
+  { value: "done", label: "Done" },
+  { value: "cancelled", label: "Cancelled" },
+];
 
 /** School weekdays for the weekly picker: Mon–Fri as ISO weekday numbers. */
 const WEEKDAYS = [1, 2, 3, 4, 5] as const;
@@ -78,8 +78,13 @@ interface FormState {
   repeatCount: string;
 }
 
-function initial(task: TaskFull | null, subjects: SubjectFull[], types: TaskType[]): FormState {
-  const dueDate = task ? task.dueDate : toISODate(new Date());
+function initial(
+  task: TaskFull | null,
+  subjects: SubjectFull[],
+  types: TaskType[],
+  initialDate?: string
+): FormState {
+  const dueDate = task ? task.dueDate : (initialDate ?? toISODate(new Date()));
   const weekday = isoWeekday(fromISODate(dueDate));
   const repeatDefaults = {
     repeat: "none" as const,
@@ -155,6 +160,7 @@ export function TaskEditor({
   periods,
   open,
   onClose,
+  initialDate,
 }: {
   task: TaskFull | null;
   subjects: SubjectFull[];
@@ -163,11 +169,13 @@ export function TaskEditor({
   periods: PeriodFull[];
   open: boolean;
   onClose: () => void;
+  /** new tasks only — seed the due date (calendar quick-add), default today */
+  initialDate?: string;
 }) {
   const toast = useToast();
   const [pending, start] = useTransition();
   const [uploading, setUploading] = useState(false);
-  const [form, setForm] = useState<FormState>(() => initial(task, subjects, types));
+  const [form, setForm] = useState<FormState>(() => initial(task, subjects, types, initialDate));
   const [error, setError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const weekdayPickerRef = useRef<HTMLDivElement>(null);
@@ -180,7 +188,7 @@ export function TaskEditor({
   // identity change that should actually reset the form)
   useEffect(() => {
     if (open) {
-      setForm(initial(task, subjects, types));
+      setForm(initial(task, subjects, types, initialDate));
       setError(null);
     }
     // intentional: subjects/types are read via closure in initial() and must
@@ -416,31 +424,35 @@ export function TaskEditor({
 
         <div className="grid grid-cols-2 gap-3">
           <Field label="Subject" required htmlFor="t-subject">
-            <Select
+            <Select<string>
               id="t-subject"
-              value={form.subjectId}
-              onChange={(e) => set("subjectId", e.target.value === "" ? "" : Number(e.target.value))}
-            >
-              {subjects.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.short} — {s.name}
-                  {s.strand ? ` (${s.strand})` : ""}
-                </option>
-              ))}
-            </Select>
+              ariaLabel="Subject"
+              align="start"
+              className="w-full"
+              value={String(form.subjectId)}
+              onChange={(v) => set("subjectId", v === "" ? "" : Number(v))}
+              options={subjects.map((s) => ({
+                value: String(s.id),
+                label: s.name,
+                hint: s.strand ? `${s.short} · ${s.strand}` : s.short,
+                hue: s.hue,
+              }))}
+            />
           </Field>
           <Field label="Type" required htmlFor="t-type">
-            <Select
+            <Select<string>
               id="t-type"
-              value={form.typeId}
-              onChange={(e) => set("typeId", e.target.value === "" ? "" : Number(e.target.value))}
-            >
-              {types.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name}
-                </option>
-              ))}
-            </Select>
+              ariaLabel="Task type"
+              align="start"
+              className="w-full"
+              value={String(form.typeId)}
+              onChange={(v) => set("typeId", v === "" ? "" : Number(v))}
+              options={types.map((t) => ({
+                value: String(t.id),
+                label: t.name,
+                hue: t.hue,
+              }))}
+            />
           </Field>
         </div>
 
@@ -449,23 +461,25 @@ export function TaskEditor({
           hint="optional — a second subject sharing this task (e.g. CPAR × PE)"
           htmlFor="t-collab"
         >
-          <Select
+          <Select<string>
             id="t-collab"
-            value={form.secondarySubjectId}
-            onChange={(e) =>
-              set("secondarySubjectId", e.target.value === "" ? "" : Number(e.target.value))
-            }
-          >
-            <option value="">No collab — single class</option>
-            {subjects
-              .filter((s) => s.id !== form.subjectId)
-              .map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.short} — {s.name}
-                  {s.strand ? ` (${s.strand})` : ""}
-                </option>
-              ))}
-          </Select>
+            ariaLabel="Collab class"
+            align="start"
+            className="w-full"
+            value={String(form.secondarySubjectId)}
+            onChange={(v) => set("secondarySubjectId", v === "" ? "" : Number(v))}
+            options={[
+              { value: "", label: "No collab", hint: "single class" },
+              ...subjects
+                .filter((s) => s.id !== form.subjectId)
+                .map((s) => ({
+                  value: String(s.id),
+                  label: s.name,
+                  hint: s.strand ? `${s.short} · ${s.strand}` : s.short,
+                  hue: s.hue,
+                })),
+            ]}
+          />
         </Field>
 
         <div className="grid grid-cols-2 gap-3">
@@ -535,16 +549,20 @@ export function TaskEditor({
               hint={form.repeat === "none" ? "make this a recurring requirement" : undefined}
               htmlFor="t-repeat"
             >
-              <Select
+              <Select<FormState["repeat"]>
                 id="t-repeat"
+                ariaLabel="Repeat"
+                align="start"
+                className="w-full"
                 value={form.repeat}
-                onChange={(e) => set("repeat", e.target.value as FormState["repeat"])}
-              >
-                <option value="none">Does not repeat</option>
-                <option value="daily">Every school day</option>
-                <option value="weekly">Weekly</option>
-                <option value="monthly">Monthly</option>
-              </Select>
+                onChange={(v) => set("repeat", v)}
+                options={[
+                  { value: "none", label: "Does not repeat" },
+                  { value: "daily", label: "Every school day" },
+                  { value: "weekly", label: "Weekly" },
+                  { value: "monthly", label: "Monthly" },
+                ]}
+              />
             </Field>
 
             {form.repeat === "weekly" && (
@@ -601,30 +619,32 @@ export function TaskEditor({
               <div className="anim-fade space-y-3">
                 <div className="grid grid-cols-2 gap-3">
                   <Field label="Week" htmlFor="t-repeat-nth">
-                    <Select
+                    <Select<string>
                       id="t-repeat-nth"
-                      value={form.repeatNth}
-                      onChange={(e) => set("repeatNth", Number(e.target.value))}
-                    >
-                      {MONTHLY_ORDINALS.map((o) => (
-                        <option key={o.value} value={o.value}>
-                          {o.label}
-                        </option>
-                      ))}
-                    </Select>
+                      ariaLabel="Week of the month"
+                      align="start"
+                      className="w-full"
+                      value={String(form.repeatNth)}
+                      onChange={(v) => set("repeatNth", Number(v))}
+                      options={MONTHLY_ORDINALS.map((o) => ({
+                        value: String(o.value),
+                        label: o.label,
+                      }))}
+                    />
                   </Field>
                   <Field label="Weekday" htmlFor="t-repeat-weekday">
-                    <Select
+                    <Select<string>
                       id="t-repeat-weekday"
-                      value={form.repeatWeekday}
-                      onChange={(e) => set("repeatWeekday", Number(e.target.value))}
-                    >
-                      {WEEKDAYS.map((wd) => (
-                        <option key={wd} value={wd}>
-                          {weekdayShort(wd)}
-                        </option>
-                      ))}
-                    </Select>
+                      ariaLabel="Weekday"
+                      align="start"
+                      className="w-full"
+                      value={String(form.repeatWeekday)}
+                      onChange={(v) => set("repeatWeekday", Number(v))}
+                      options={WEEKDAYS.map((wd) => ({
+                        value: String(wd),
+                        label: weekdayShort(wd),
+                      }))}
+                    />
                   </Field>
                 </div>
                 <Field label="Every" hint="months" htmlFor="t-repeat-interval">
@@ -644,16 +664,18 @@ export function TaskEditor({
               <div className="anim-fade space-y-3">
                 <div className="grid grid-cols-2 gap-3">
                   <Field label="Ends" htmlFor="t-repeat-end">
-                    <Select
+                    <Select<FormState["repeatEndMode"]>
                       id="t-repeat-end"
+                      ariaLabel="How the repeat ends"
+                      align="start"
+                      className="w-full"
                       value={form.repeatEndMode}
-                      onChange={(e) =>
-                        set("repeatEndMode", e.target.value as FormState["repeatEndMode"])
-                      }
-                    >
-                      <option value="count">After a number of times</option>
-                      <option value="until">On a date</option>
-                    </Select>
+                      onChange={(v) => set("repeatEndMode", v)}
+                      options={[
+                        { value: "count", label: "After a number of times" },
+                        { value: "until", label: "On a date" },
+                      ]}
+                    />
                   </Field>
                   {form.repeatEndMode === "count" ? (
                     <Field label="Times" htmlFor="t-repeat-count">
@@ -696,17 +718,15 @@ export function TaskEditor({
 
         <div className="grid grid-cols-2 gap-3">
           <Field label="Status" htmlFor="t-status">
-            <Select
+            <Select<TaskStatus>
               id="t-status"
+              ariaLabel="Status"
+              align="start"
+              className="w-full"
               value={form.status}
-              onChange={(e) => set("status", e.target.value as TaskStatus)}
-            >
-              {TASK_STATUSES.map((s) => (
-                <option key={s} value={s}>
-                  {STATUS_LABEL[s]}
-                </option>
-              ))}
-            </Select>
+              onChange={(v) => set("status", v)}
+              options={STATUS_OPTIONS}
+            />
           </Field>
           <Field label="Points" hint="optional" htmlFor="t-points">
             <Input

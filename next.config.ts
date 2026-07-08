@@ -6,8 +6,10 @@ const nextConfig: NextConfig = {
   // lets a second dev server run against its own build dir (two sessions
   // sharing .next corrupt each other's webpack cache)
   distDir: process.env.NEXT_DIST_DIR || ".next",
-  // baseline hardening — no framing (clickjacking), no MIME sniffing, and a
-  // conservative referrer policy, plus a CSP and (in production) HSTS.
+  // baseline hardening — same-origin-only framing (blocks cross-site
+  // clickjacking while letting the app preview its own uploaded materials
+  // in an <iframe>), no MIME sniffing, a conservative referrer policy, plus a
+  // CSP and (in production) HSTS.
   //
   // The CSP is shipped Report-Only for now: Next's dev overlay and some of
   // its inline bootstrap scripts need either 'unsafe-inline' or a nonce
@@ -21,14 +23,14 @@ const nextConfig: NextConfig = {
       "default-src 'self'",
       "base-uri 'self'",
       "object-src 'none'",
-      "frame-ancestors 'none'",
+      "frame-ancestors 'self'",
       "img-src 'self' data:",
       "style-src 'self' 'unsafe-inline'",
       "script-src 'self' 'unsafe-inline'",
     ].join("; ");
 
     const headers = [
-      { key: "X-Frame-Options", value: "DENY" },
+      { key: "X-Frame-Options", value: "SAMEORIGIN" },
       { key: "X-Content-Type-Options", value: "nosniff" },
       { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
       { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },

@@ -81,7 +81,7 @@ export function Segmented<T extends string | number>({
               }
             }}
             className={cn(
-              "relative z-10 flex min-w-8 flex-1 items-center justify-center rounded-[5px] px-2 text-[12.5px] font-medium transition-colors duration-[var(--dur-1)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color-mix(in_oklab,var(--ring)_55%,transparent)]",
+              "relative z-10 flex min-w-8 flex-1 items-center justify-center whitespace-nowrap rounded-[5px] px-2 text-[12.5px] font-medium transition-colors duration-[var(--dur-1)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color-mix(in_oklab,var(--ring)_55%,transparent)]",
               active ? "text-ink" : "text-muted hover:text-ink"
             )}
           >

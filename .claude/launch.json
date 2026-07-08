@@ -22,6 +22,14 @@
       "runtimeArgs": ["run", "start"],
       "port": 3000,
       "autoPort": true
+    },
+    {
+      "name": "start-isolated",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "start"],
+      "env": { "NEXT_DIST_DIR": ".next-preview" },
+      "port": 3000,
+      "autoPort": true
     }
   ]
 }

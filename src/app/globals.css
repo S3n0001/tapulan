@@ -1,7 +1,13 @@
 @import "tailwindcss";
 
-/* next-themes drives the theme with a class on <html>. Dark is the default. */
+/* next-themes drives the theme with a class on <html>: light (:root), .dark,
+   and .theme-sepia — a light-family warm-paper theme that inherits everything
+   it doesn't override from :root. The sepia theme's class is deliberately NOT
+   `.sepia`: Tailwind ships a `sepia` filter utility (filter: sepia(100%)), and
+   with that class on <html> the entire app gets colour-washed. next-themes
+   maps the "sepia" theme name to this class via its `value` prop. */
 @custom-variant dark (&:where(.dark, .dark *));
+@custom-variant sepia (&:where(.theme-sepia, .theme-sepia *));
 
 /* ============================================================ tokens */
 
@@ -140,6 +146,40 @@
   --shadow-overlay: 0 2px 6px oklch(0 0 0 / 0.45), 0 16px 44px oklch(0 0 0 / 0.6);
 }
 
+/* Sepia — the logbook on warm parchment. A genuinely warm cream sheet on a tan
+   desk, sepia-brown ink; warm orange-brown (hue ~50–78, like Claude's own
+   warmth), light and bright but never near-white and never the yellow-green
+   "highlighter" cast. The warmth is carried by CHROMA at a high lightness, not
+   by going dark — so the paper reads unmistakably sepia while every inherited
+   semantic text colour still clears AA. Only the neutral architecture, tints
+   and shadows change; cobalt, the semantic states and the 14-hue ramp inherit
+   from :root — blue ink and colored data on parchment. Every text token
+   verified ≥4.5:1 on every surface it can sit on (bg, cards, active rows AND
+   the sidebar). */
+.theme-sepia {
+  color-scheme: light;
+
+  --shell: oklch(0.905 0.042 62);       /* the desk — a warm tan, a clear step below the paper */
+  --bg: oklch(0.952 0.038 65);          /* the paper — aged manila, unmistakably sepia */
+  --surface: oklch(0.928 0.043 63);     /* cards / inputs raised on paper */
+  --surface-2: oklch(0.902 0.048 61);   /* active nav / hover-2 */
+  --pop: oklch(0.966 0.03 67);          /* overlays: menus, palette, toast — the cleanest sheet */
+  --ink: oklch(0.3 0.04 48);            /* espresso-brown ink — 11.9:1 on --bg */
+  --muted: oklch(0.435 0.042 50);       /* 6.9:1 on --bg */
+  --faint: oklch(0.49 0.038 52);        /* micro-meta — ≥4.5:1 on bg, cards, active rows AND shell */
+  --line: oklch(0.867 0.038 60);
+  --line-strong: oklch(0.802 0.042 58);
+
+  /* subject tints mix against the warmer ground; these strengths keep hue legible */
+  --tint: 10%;
+  --tint-2: 14%;
+  --tint-active: 20%;
+
+  /* warm-brown shadows — a gray shade sits dead on parchment */
+  --shadow-pop: 0 1px 2px oklch(0.27 0.05 50 / 0.09), 0 8px 24px oklch(0.27 0.05 50 / 0.18);
+  --shadow-overlay: 0 2px 6px oklch(0.23 0.05 50 / 0.12), 0 16px 48px oklch(0.23 0.05 50 / 0.3);
+}
+
 /* ============================================ Tailwind token mapping */
 
 @theme inline {
@@ -275,6 +315,23 @@
       color-mix(in oklab, var(--ink) 5%, transparent) 0 1px,
       transparent 1px 7px
     );
+  }
+
+  /* the quiet "canvas" that fills a view's empty tail — a faint dot field so a
+     short list (or a free calendar day) settles onto a considered surface
+     instead of bottoming out into a flat void. Eased in from the top with a
+     mask so there's never a hard seam where the content ends. Pair with
+     `flex-1` so it claims exactly the leftover height. */
+  .canvas-floor {
+    background-image: radial-gradient(
+      circle,
+      color-mix(in oklab, var(--ink) 6%, transparent) 0 1px,
+      transparent 1.4px
+    );
+    background-size: 22px 22px;
+    background-position: center top;
+    -webkit-mask-image: linear-gradient(to bottom, transparent, #000 64px);
+    mask-image: linear-gradient(to bottom, transparent, #000 64px);
   }
 
   .no-scrollbar {

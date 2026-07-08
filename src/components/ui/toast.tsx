@@ -97,7 +97,10 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         className={cn(
           "pointer-events-none fixed z-[70] flex flex-col items-center gap-2",
           "inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+4.25rem)]",
-          "lg:inset-x-auto lg:bottom-4 lg:right-4 lg:items-end"
+          // desktop: park bottom-right, but slide left of an open side peek so a
+          // toast never covers the panel footer / fields being inline-edited
+          "lg:inset-x-auto lg:bottom-4 lg:items-end lg:right-[var(--peek-inset,1rem)]",
+          "lg:transition-[right] lg:duration-[var(--dur-2)] lg:ease-[var(--ease-out)]"
         )}
       >
         {toasts.map((t) => (

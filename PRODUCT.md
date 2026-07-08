@@ -20,7 +20,10 @@ Precise, calm, quietly funny. "Tapulan" is Bisaya for *lazy* — the joke is the
 
 - LMS clutter (Moodle, Canvas, Google Classroom): no announcement soup, no nested modules, no engagement widgets.
 - Gamified study apps: no streaks, XP, mascots, or confetti.
-- SaaS landing gloss: no hero metrics, no gradient text, no marketing sections inside a tool.
+- SaaS landing gloss: no hero metrics, no gradient text, no marketing sections. The one landing
+  we do have (`/welcome`, a first-run onboarding cover) obeys this too — the section's real name
+  is the only large element, the sole "stat" is an honest request-time reading of the section's
+  actual state, and there is no promo section, illustration, or success flourish.
 
 ## Design Principles
 
@@ -33,4 +36,4 @@ Precise, calm, quietly funny. "Tapulan" is Bisaya for *lazy* — the joke is the
 
 ## Accessibility & Inclusion
 
-WCAG AA: body text ≥4.5:1 in both themes, status never encoded by color alone (always paired with a label), visible focus rings, `prefers-reduced-motion` alternatives for the live pulse and transitions, semantic landmarks, and honest `<time>` elements. Works on cheap Android phones: no heavy assets, system-grade fonts shipped locally.
+WCAG AA: body text ≥4.5:1 in every theme, status never encoded by color alone (always paired with a label), visible focus rings, `prefers-reduced-motion` alternatives for the live pulse and transitions, semantic landmarks, and honest `<time>` elements. Works on cheap Android phones: no heavy assets, system-grade fonts shipped locally.

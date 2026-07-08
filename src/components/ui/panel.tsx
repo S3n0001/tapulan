@@ -86,6 +86,22 @@ export function Panel({
     };
   }, [open, nonModal]);
 
+  // publish the open panel's footprint so transient corner UI (toasts) can
+  // slide clear of it — otherwise a bottom-right toast lands right on the
+  // panel's footer and the fields being edited. Applies to any desktop panel
+  // (all render as the right-side peek): the live peek's inline edits and a
+  // modal editor's error toast both fire while it's open. Off on mobile, where
+  // the panel is a bottom sheet and toasts sit above the tab bar. Footprint =
+  // the panel's right inset (right-2 = 8px) + its width + a 12px gutter.
+  useEffect(() => {
+    if (!open || !desktop) return;
+    const width = wide ? 480 : 408;
+    document.documentElement.style.setProperty("--peek-inset", `${8 + width + 12}px`);
+    return () => {
+      document.documentElement.style.removeProperty("--peek-inset");
+    };
+  }, [open, desktop, wide]);
+
   // escape + save shortcut + tab trap
   useEffect(() => {
     if (!open) return;

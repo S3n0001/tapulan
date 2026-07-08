@@ -6,7 +6,8 @@ import { createSubject, deleteSubject, updateSubject, type SubjectInput } from "
 import type { Strand, SubjectFull, Teacher } from "@/lib/domain/types";
 import { Panel } from "@/components/ui/panel";
 import { Button } from "@/components/ui/button";
-import { Field, Input, Select } from "@/components/ui/field";
+import { Field, Input } from "@/components/ui/field";
+import { Select } from "@/components/ui/select";
 import { HueSelect } from "@/components/ui/hue-select";
 import { useToast } from "@/components/ui/toast";
 import { useConfirm } from "@/components/ui/confirm";
@@ -166,32 +167,39 @@ export function SubjectEditor({
 
         <div className="grid grid-cols-2 gap-3">
           <Field label="Teacher" htmlFor="s-teacher">
-            <Select
+            <Select<string>
               id="s-teacher"
-              value={form.teacherId}
-              onChange={(e) => set("teacherId", e.target.value === "" ? "" : Number(e.target.value))}
-            >
-              <option value="">No teacher</option>
-              {teachers.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name}
-                </option>
-              ))}
-            </Select>
+              ariaLabel="Teacher"
+              align="start"
+              className="w-full"
+              value={String(form.teacherId)}
+              onChange={(v) => set("teacherId", v === "" ? "" : Number(v))}
+              options={[
+                { value: "", label: "No teacher" },
+                ...teachers.map((t) => ({ value: String(t.id), label: t.name })),
+              ]}
+            />
           </Field>
           <Field label="Strand" hint="empty = core, taken by all" htmlFor="s-strand">
-            <Select
+            <Select<string>
               id="s-strand"
+              ariaLabel="Strand"
+              align="start"
+              className="w-full"
               value={form.strand}
-              onChange={(e) => set("strand", e.target.value)}
-            >
-              <option value="">Core — every strand</option>
-              {strands.map((s) => (
-                <option key={s.code} value={s.code}>
-                  {s.code} — {s.name}
-                </option>
-              ))}
-            </Select>
+              onChange={(v) => set("strand", v)}
+              options={[
+                { value: "", label: "Core", hint: "every strand" },
+                ...strands.map((s) => ({
+                  value: s.code,
+                  label: (
+                    <span className="font-mono text-[12.5px] font-semibold">{s.code}</span>
+                  ),
+                  hint: s.name,
+                  hue: s.hue,
+                })),
+              ]}
+            />
           </Field>
         </div>
 

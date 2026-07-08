@@ -13,6 +13,7 @@ import {
 } from "@/lib/domain/types";
 import { accentStyle } from "@/lib/domain/hues";
 import { cn } from "@/lib/utils";
+import { useRetained } from "@/hooks/use-retained";
 import { ViewChrome } from "@/components/shell/view-chrome";
 import { EmptyState } from "@/components/ui/empty";
 import { useIsAdmin } from "@/components/shell/admin-context";
@@ -41,6 +42,8 @@ export function ClassesView({
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [editing, setEditing] = useState<SubjectFull | null>(null);
+  // retained through the close so the editor's exit animation plays intact
+  const shownEditing = useRetained(editing);
 
   const selectedId = Number(searchParams.get("c")) || null;
   const select = useCallback(
@@ -106,12 +109,13 @@ export function ClassesView({
     >
 
       {subjects.length === 0 ? (
-        <EmptyState icon={Library} title="No subjects yet">
+        <EmptyState fill icon={Library} title="No subjects yet">
           Subjects appear here once an admin adds them under Admin → Subjects.
         </EmptyState>
       ) : (
-        groups.map((group) => (
-          <section key={group.key}>
+        <>
+          {groups.map((group) => (
+            <section key={group.key}>
             <div className="sticky top-[calc(3rem+env(safe-area-inset-top)+2.75rem)] z-10 flex h-7 items-center gap-2 border-b border-line/70 bg-[color-mix(in_oklab,var(--surface)_45%,var(--bg))] px-3.5 backdrop-blur lg:top-0 lg:px-4">
               <h3 className="text-[11px] font-medium text-muted">{group.title}</h3>
               <span className="text-[11px] text-faint">{group.hint}</span>
@@ -192,7 +196,10 @@ export function ClassesView({
               })}
             </ul>
           </section>
-        ))
+          ))}
+          {/* fill the tail so a short subject list rests on a considered surface */}
+          <div aria-hidden className="canvas-floor min-h-16 flex-1" />
+        </>
       )}
 
       <ClassPanel
@@ -205,12 +212,12 @@ export function ClassesView({
         nowISO={nowISO}
       />
 
-      {isAdmin && editing !== null && (
+      {isAdmin && (
         <SubjectEditor
-          subject={editing}
+          subject={shownEditing}
           teachers={teachers}
           strands={strands}
-          open
+          open={editing !== null}
           onClose={() => setEditing(null)}
         />
       )}

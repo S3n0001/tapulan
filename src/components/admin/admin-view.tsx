@@ -181,7 +181,7 @@ export function AdminDashboard({
       }
     >
 
-      <div key={tab} className="anim-fade">
+      <div key={tab} className="anim-view">
         {tab === "tasks" && (
           <TasksView
             tasks={tasks}

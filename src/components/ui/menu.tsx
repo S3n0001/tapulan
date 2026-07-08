@@ -166,6 +166,7 @@ export function MenuItem({
   disabled,
   children,
   trailing,
+  dataAutofocus,
 }: {
   onSelect: () => void;
   icon?: ReactNode;
@@ -174,12 +175,16 @@ export function MenuItem({
   disabled?: boolean;
   children: ReactNode;
   trailing?: ReactNode;
+  /** marks this item as the enclosing Popover's autofocus target, so opening
+   *  a picker lands focus on the current value instead of the first row */
+  dataAutofocus?: boolean;
 }) {
   return (
     <button
       type="button"
       role="menuitem"
       disabled={disabled}
+      data-autofocus={dataAutofocus ? "" : undefined}
       onClick={onSelect}
       className={cn(
         "flex h-8 w-full items-center gap-2 rounded-[5px] px-2 text-left text-[13px] font-medium outline-none transition-colors duration-[var(--dur-1)] tap",

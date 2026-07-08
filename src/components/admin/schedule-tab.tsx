@@ -7,6 +7,7 @@ import { DAY_NAMES, fmtDateMed, fmtDuration, fmtMin, toISODate } from "@/lib/dom
 import { accentStyle } from "@/lib/domain/hues";
 import { DAY_MARK_HUE, DAY_MARK_SHORT, dayMarkTitle } from "@/lib/domain/day-mark";
 import { cn } from "@/lib/utils";
+import { useRetained } from "@/hooks/use-retained";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty";
 import { PeriodEditor } from "./period-editor";
@@ -28,6 +29,9 @@ export function ScheduleTab({
 }) {
   const [editing, setEditing] = useState<PeriodFull | "new" | null>(null);
   const [newDay, setNewDay] = useState(1);
+  // stays mounted through the close so the panel's exit animation plays with
+  // the last-edited period still on it
+  const shown = useRetained(editing);
 
   const byDay = useMemo(() => {
     const map = new Map<number, PeriodFull[]>();
@@ -162,17 +166,15 @@ export function ScheduleTab({
         })
       )}
 
-      {editing !== null && (
-        <PeriodEditor
-          period={editing === "new" ? null : editing}
-          defaultDay={newDay}
-          subjects={subjects}
-          teachers={teachers}
-          strands={strands}
-          open
-          onClose={() => setEditing(null)}
-        />
-      )}
+      <PeriodEditor
+        period={shown === null || shown === "new" ? null : shown}
+        defaultDay={newDay}
+        subjects={subjects}
+        teachers={teachers}
+        strands={strands}
+        open={editing !== null}
+        onClose={() => setEditing(null)}
+      />
     </div>
   );
 }
@@ -182,6 +184,7 @@ export function ScheduleTab({
 /** Date-specific async / no-class overrides, above the weekly template. */
 function CalendarSection({ dayMarks }: { dayMarks: DayMark[] }) {
   const [editing, setEditing] = useState<DayMark | "new" | null>(null);
+  const shown = useRetained(editing);
 
   return (
     <div className="border-b border-line">
@@ -238,14 +241,12 @@ function CalendarSection({ dayMarks }: { dayMarks: DayMark[] }) {
         </ul>
       )}
 
-      {editing !== null && (
-        <DayMarkEditor
-          mark={editing === "new" ? null : editing}
-          defaultDate={toISODate(new Date())}
-          open
-          onClose={() => setEditing(null)}
-        />
-      )}
+      <DayMarkEditor
+        mark={shown === null || shown === "new" ? null : shown}
+        defaultDate={toISODate(new Date())}
+        open={editing !== null}
+        onClose={() => setEditing(null)}
+      />
     </div>
   );
 }

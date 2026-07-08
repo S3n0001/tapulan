@@ -16,6 +16,7 @@ import {
   type TaskFull,
   type Teacher,
 } from "@/lib/domain/types";
+import { useRetained } from "@/hooks/use-retained";
 import { useIsAdmin } from "@/components/shell/admin-context";
 import { SubjectEditor } from "@/components/admin/subject-editor";
 import { ClassPanel } from "./class-panel";
@@ -64,6 +65,8 @@ export function ClassDetailProvider({
   const isAdmin = useIsAdmin();
   const [openId, setOpenId] = useState<number | null>(null);
   const [editing, setEditing] = useState<SubjectFull | null>(null);
+  // retained through the close so the editor's exit animation plays intact
+  const shownEditing = useRetained(editing);
 
   const openClass = useCallback((id: number) => setOpenId(id), []);
   const api = useMemo<ClassDetailApi>(() => ({ openClass }), [openClass]);
@@ -95,12 +98,12 @@ export function ClassDetailProvider({
         nowISO={nowISO}
       />
 
-      {isAdmin && editing !== null && (
+      {isAdmin && (
         <SubjectEditor
-          subject={editing}
+          subject={shownEditing}
           teachers={teachers}
           strands={strands}
-          open
+          open={editing !== null}
           onClose={() => setEditing(null)}
         />
       )}

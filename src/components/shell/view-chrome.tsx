@@ -15,6 +15,11 @@ export interface Crumb {
  * nothing but content (the Linear pattern). On mobile the global top bar already
  * carries the view title, so the header folds into a sticky bar at the top of the
  * edge-to-edge panel instead — only a drilled-in crumb adds new information there.
+ *
+ * `flat` drops the desktop panel (bg + border + rounding) so the children sit
+ * straight on the shell void. Use it for views that are already made of their own
+ * self-contained cards — a panel behind them would just be a same-color backdrop.
+ * Mobile still gets the edge-to-edge panel and its sticky header.
  */
 export function ViewChrome({
   title,
@@ -24,6 +29,7 @@ export function ViewChrome({
   right,
   subrow,
   mobileSubrow,
+  flat,
   className,
   children,
 }: {
@@ -40,6 +46,8 @@ export function ViewChrome({
   subrow?: ReactNode;
   /** a row shown only on mobile, e.g. the week's day switcher */
   mobileSubrow?: ReactNode;
+  /** drop the desktop content panel — children sit on the shell (see note above) */
+  flat?: boolean;
   /** extra classes for the content panel */
   className?: string;
   children?: ReactNode;
@@ -105,7 +113,7 @@ export function ViewChrome({
       <div className="hidden shrink-0 flex-col lg:flex">
         <div className="flex min-h-12 items-center gap-2.5 px-4 pb-2.5 pt-4">
           {Icon && <Icon aria-hidden className="size-4.5 shrink-0 text-muted" strokeWidth={1.75} />}
-          <div className="flex min-w-0 items-baseline gap-2.5">
+          <div className="flex min-w-0 items-center gap-2.5">
             {heading}
             {metaEl}
           </div>
@@ -114,10 +122,14 @@ export function ViewChrome({
         {subrow && <div className="pb-1.5">{subrow}</div>}
       </div>
 
-      {/* content panel */}
+      {/* content panel — flat views drop the desktop bg/border so children
+          float on the shell; mobile keeps the edge-to-edge panel either way */}
       <div
         className={cn(
-          "relative flex flex-1 flex-col bg-bg pb-[calc(52px+env(safe-area-inset-bottom))] lg:min-h-0 lg:overflow-y-auto lg:rounded-[var(--r-panel)] lg:border lg:border-line lg:pb-0",
+          "relative flex flex-1 flex-col bg-bg pb-[calc(52px+env(safe-area-inset-bottom))] lg:min-h-0 lg:overflow-y-auto lg:pb-0",
+          flat
+            ? "lg:bg-transparent"
+            : "lg:rounded-[var(--r-panel)] lg:border lg:border-line",
           className
         )}
       >
