@@ -1,4 +1,5 @@
-import { Toolbar } from "@/components/shell/toolbar";
+import { Clock3 } from "lucide-react";
+import { ViewChrome } from "@/components/shell/view-chrome";
 import { Skeleton } from "@/components/ui/skeleton";
 
 /** Today, loading — mirrors the now-card + timeline + due-soon rail geometry. */
@@ -8,11 +9,10 @@ const META_W = ["34%", "42%", "28%", "38%", "31%", "44%", "36%"];
 
 export default function TodayLoading() {
   return (
-    <div aria-busy="true">
+    <ViewChrome title="Today" icon={Clock3} meta={<Skeleton className="h-3.5 w-24" />}>
       <span role="status" className="sr-only">
         Loading today&apos;s schedule…
       </span>
-      <Toolbar title="Today" meta={<Skeleton className="h-3 w-24" />} />
 
       <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_336px]">
         <section className="min-w-0 lg:border-r lg:border-line">
@@ -83,6 +83,6 @@ export default function TodayLoading() {
           </div>
         </aside>
       </div>
-    </div>
+    </ViewChrome>
   );
 }

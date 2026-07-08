@@ -3,7 +3,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ListTodo, Plus } from "lucide-react";
-import type { SubjectFull, TaskFull, TaskType } from "@/lib/domain/types";
+import type { PeriodFull, SubjectFull, TaskFull, TaskType } from "@/lib/domain/types";
 import { groupByBucket } from "@/lib/domain/tasks";
 import { useNow } from "@/hooks/use-now";
 import { useDone } from "@/hooks/use-done";
@@ -11,7 +11,8 @@ import { cn } from "@/lib/utils";
 import { EmptyState } from "@/components/ui/empty";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/field";
-import { Toolbar } from "@/components/shell/toolbar";
+import { useToast } from "@/components/ui/toast";
+import { ViewChrome } from "@/components/shell/view-chrome";
 import { useIsAdmin } from "@/components/shell/admin-context";
 import { TaskListRow } from "./task-list-row";
 import { TaskPanel } from "./task-panel";
@@ -28,21 +29,37 @@ export function TasksView({
   tasks,
   subjects,
   types,
+  periods,
   nowISO,
   embedded = false,
 }: {
   tasks: TaskFull[];
   subjects: SubjectFull[];
   types: TaskType[];
+  /** the strand's schedule — lets the editor resolve held-in-class meeting times */
+  periods: PeriodFull[];
   nowISO: string;
   embedded?: boolean;
 }) {
   const now = useNow(nowISO, 60_000);
   const { isDone, toggle } = useDone();
+  const toast = useToast();
   const isAdmin = useIsAdmin();
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+
+  // personal "done for me" toggle silently flipped state with no feedback;
+  // surface a brief toast, with the toggle itself doubling as the undo (tap
+  // the row's check / the panel button again to flip back)
+  const toggleDoneWithToast = useCallback(
+    (id: number) => {
+      const willBeDone = !isDone(id);
+      toggle(id);
+      toast.info(willBeDone ? "Marked done for you" : "Marked not done");
+    },
+    [isDone, toggle, toast]
+  );
 
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
   const [showDone, setShowDone] = useState(false);
@@ -126,22 +143,8 @@ export function TasksView({
     </>
   );
 
-  return (
-    <div className={embedded ? undefined : "anim-view"}>
-      {embedded ? (
-        <div className="border-b border-line">
-          <div className="flex h-11 items-center gap-2 px-3.5 lg:px-4">
-            <span className="tnum font-mono text-[12px] text-faint">{openCount} open</span>
-            <div className="ml-auto flex items-center gap-2">{controls}</div>
-          </div>
-          {filterRow}
-        </div>
-      ) : (
-        <Toolbar title="Tasks" meta={<span>{openCount} open</span>} right={controls}>
-          {filterRow}
-        </Toolbar>
-      )}
-
+  const content = (
+    <>
       {groups.length === 0 ? (
         <EmptyState
           icon={ListTodo}
@@ -168,12 +171,12 @@ export function TasksView({
                   "sticky z-10 flex h-7 items-center gap-2 border-b border-line/70 bg-[color-mix(in_oklab,var(--surface)_45%,var(--bg))] px-3.5 backdrop-blur lg:px-4",
                   embedded
                     ? "top-0"
-                    : "top-[calc(3rem+env(safe-area-inset-top)+5.25rem)] lg:top-[5.25rem]"
+                    : "top-[calc(3rem+env(safe-area-inset-top)+4.875rem)] lg:top-0"
                 )}
               >
                 <h3
                   className={cn(
-                    "font-mono text-[10.5px] font-semibold uppercase tracking-[0.06em]",
+                    "text-[11px] font-medium",
                     group.bucket === "overdue" ? "text-danger-text" : "text-muted"
                   )}
                 >
@@ -191,7 +194,7 @@ export function TasksView({
                       now={now}
                       done={isDone(task.id)}
                       selected={task.id === selectedId}
-                      onToggleDone={() => toggle(task.id)}
+                      onToggleDone={() => toggleDoneWithToast(task.id)}
                       onOpen={() => select(task.id)}
                     />
                   </li>
@@ -204,13 +207,18 @@ export function TasksView({
 
       <TaskPanel
         task={selected}
+        subjects={subjects}
+        types={types}
         open={selected !== null}
         onClose={() => select(null)}
         done={selected ? isDone(selected.id) : false}
-        onToggleDone={() => selected && toggle(selected.id)}
+        onToggleDone={() => selected && toggleDoneWithToast(selected.id)}
         onEdit={(t) => {
+          // close the detail panel first, then open the editor a frame later
+          // — doing both in the same tick races the closing Panel's
+          // focus-restore against the opening editor's autofocus
           select(null);
-          setEditing(t);
+          requestAnimationFrame(() => setEditing(t));
         }}
         nowISO={nowISO}
       />
@@ -220,11 +228,48 @@ export function TasksView({
           task={editing === "new" ? null : editing}
           subjects={subjects}
           types={types}
+          periods={periods}
           open
           onClose={() => setEditing(null)}
         />
       )}
-    </div>
+    </>
+  );
+
+  if (embedded) {
+    return (
+      <div>
+        <div className="border-b border-line">
+          <div className="flex h-11 items-center gap-2 px-3.5 lg:px-4">
+            <span className="tnum font-mono text-[12px] text-faint">{openCount} open</span>
+            <div className="ml-auto flex items-center gap-2">{controls}</div>
+          </div>
+          {filterRow}
+        </div>
+        {content}
+      </div>
+    );
+  }
+
+  return (
+    <ViewChrome
+      title="Tasks"
+      icon={ListTodo}
+      crumbs={
+        selected
+          ? [
+              { label: "Tasks", onClick: () => select(null) },
+              { label: selected.subject.short, mono: true },
+              { label: selected.title },
+            ]
+          : undefined
+      }
+      meta={<span className="tnum">{openCount} open</span>}
+      right={controls}
+      subrow={filterRow}
+    >
+      {content}
+    </ViewChrome>
   );
 }
 

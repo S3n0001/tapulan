@@ -1,4 +1,5 @@
-import { Toolbar } from "@/components/shell/toolbar";
+import { ListTodo } from "lucide-react";
+import { ViewChrome } from "@/components/shell/view-chrome";
 import { Skeleton } from "@/components/ui/skeleton";
 
 /** Tasks, loading — filter chips, a bucket header, and issue-tracker rows. */
@@ -21,21 +22,22 @@ function GhostRow({ w }: { w: string }) {
 
 export default function TasksLoading() {
   return (
-    <div aria-busy="true">
-      <span role="status" className="sr-only">
-        Loading tasks…
-      </span>
-      <Toolbar
-        title="Tasks"
-        meta={<Skeleton className="h-3 w-12" />}
-        right={<Skeleton className="h-4 w-28" />}
-      >
+    <ViewChrome
+      title="Tasks"
+      icon={ListTodo}
+      meta={<Skeleton className="h-3.5 w-12" />}
+      right={<Skeleton className="h-4 w-28" />}
+      subrow={
         <div className="flex items-center gap-1.5 px-3.5 pb-2.5 lg:px-4" aria-hidden>
           {["w-14", "w-20", "w-16", "w-24"].map((w, i) => (
             <Skeleton key={i} className={`h-6 ${w} rounded-[var(--r-chip)]`} />
           ))}
         </div>
-      </Toolbar>
+      }
+    >
+      <span role="status" className="sr-only">
+        Loading tasks…
+      </span>
 
       {[0, 1].map((section) => (
         <section key={section}>
@@ -50,6 +52,6 @@ export default function TasksLoading() {
           </div>
         </section>
       ))}
-    </div>
+    </ViewChrome>
   );
 }

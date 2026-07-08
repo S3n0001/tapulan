@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, useTransition, type ReactNode } from "react";
 import {
   ArrowRight,
   CalendarClock,
@@ -24,21 +24,54 @@ import {
   deleteTaskSeries,
   describeTaskSeries,
   moveTask,
+  patchTask,
   setTaskDoneInClass,
+  type TaskPatch,
 } from "@/actions/tasks";
-import type { TaskFull, TaskSeries } from "@/lib/domain/types";
+import type { SubjectFull, TaskFull, TaskSeries, TaskType } from "@/lib/domain/types";
+import { dueMinOf } from "@/lib/domain/tasks";
 import { describeRule } from "@/lib/domain/recurrence";
-import { dueLabel, fmtDateLong, fmtDateMed, fmtMinAmPm, isISODate } from "@/lib/domain/time";
+import {
+  addDays,
+  dueLabel,
+  fmtDateLong,
+  fmtDateMed,
+  fmtMinAmPm,
+  isISODate,
+  schoolWeekMonday,
+  toISODate,
+} from "@/lib/domain/time";
 import { accentStyle } from "@/lib/domain/hues";
 import { useNow } from "@/hooks/use-now";
 import { cn } from "@/lib/utils";
 import { Panel } from "@/components/ui/panel";
 import { Button } from "@/components/ui/button";
-import { HueBadge, OkFlag, Status } from "@/components/ui/badge";
+import { HueBadge, InfoFlag, OkFlag, Status } from "@/components/ui/badge";
 import { Field, Input, Textarea, Checkbox } from "@/components/ui/field";
+import { Popover } from "@/components/ui/popover";
+import { MenuItem } from "@/components/ui/menu";
+import { InlineText, InlineTextArea } from "@/components/ui/inline-text";
 import { useToast } from "@/components/ui/toast";
 import { useConfirm } from "@/components/ui/confirm";
 import { useIsAdmin } from "@/components/shell/admin-context";
+
+/**
+ * Backstop for unsanitized stored URLs: only ever render an href for http(s)
+ * links or our own uploaded-file paths. Anything else (javascript:, data:,
+ * etc.) renders as plain text instead of a clickable link.
+ */
+function safeHref(url: string): string | null {
+  if (url.startsWith("/api/files/")) return url;
+  try {
+    // a base is only needed to resolve protocol-relative/relative inputs;
+    // any fixed http(s) base works since we only read back the parsed result
+    const parsed = new URL(url, "https://tapulan.invalid");
+    if (parsed.protocol === "http:" || parsed.protocol === "https:") return url;
+  } catch {
+    // not a parseable URL — fall through to null
+  }
+  return null;
+}
 
 function Property({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -49,14 +82,129 @@ function Property({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
+/** A property value that opens an editor — keeps the read appearance, hover reveals it. */
+const ROW_TRIGGER =
+  "tap -mx-1 flex min-w-0 items-center gap-2 rounded-[4px] px-1 py-0.5 text-left transition-colors hover:bg-surface-2";
+
+/** Menu-item list inside a Popover, with the Menu's arrow-key focus walk. */
+function PickerList({ label, children }: { label: string; children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  function onKey(e: React.KeyboardEvent) {
+    if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+    e.preventDefault();
+    const items = [
+      ...(ref.current?.querySelectorAll<HTMLElement>('[role="menuitem"]:not([disabled])') ?? []),
+    ];
+    if (items.length === 0) return;
+    const idx = items.indexOf(document.activeElement as HTMLElement);
+    const next =
+      e.key === "ArrowDown"
+        ? items[(idx + 1) % items.length]
+        : items[(idx - 1 + items.length) % items.length];
+    next.focus();
+  }
+  return (
+    <div ref={ref} role="menu" aria-label={label} onKeyDown={onKey} className="max-h-[320px] overflow-y-auto">
+      {children}
+    </div>
+  );
+}
+
+/** Click-to-edit points: a bare number input in place, empty clears them. */
+function PointsInline({
+  value,
+  onCommit,
+}: {
+  value: number | null;
+  onCommit: (points: number | null) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const cancelRef = useRef(false);
+  const refocusRef = useRef(false);
+
+  useLayoutEffect(() => {
+    if (editing) {
+      inputRef.current?.focus({ preventScroll: true });
+      inputRef.current?.select();
+    } else if (refocusRef.current) {
+      refocusRef.current = false;
+      buttonRef.current?.focus({ preventScroll: true });
+    }
+  }, [editing]);
+
+  if (!editing) {
+    return (
+      <button
+        ref={buttonRef}
+        type="button"
+        onClick={() => {
+          cancelRef.current = false;
+          setDraft(value !== null ? String(value) : "");
+          setEditing(true);
+        }}
+        className={cn(
+          "tnum cursor-text rounded-[3px] text-left font-mono text-[12.5px] outline-none focus-visible:ring-2 focus-visible:ring-[color-mix(in_oklab,var(--ring)_45%,transparent)]",
+          value === null && "text-faint"
+        )}
+      >
+        {value !== null ? `${value} pts` : "Add points"}
+      </button>
+    );
+  }
+
+  return (
+    <span className="flex items-center gap-1.5">
+      <input
+        ref={inputRef}
+        type="number"
+        min={0}
+        inputMode="numeric"
+        value={draft}
+        placeholder="—"
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={() => {
+          setEditing(false);
+          if (cancelRef.current) return;
+          const raw = draft.trim();
+          const next = raw === "" ? null : Number(raw);
+          if (next !== null && (!Number.isFinite(next) || next < 0)) return;
+          if (next !== value) onCommit(next);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            refocusRef.current = true;
+            inputRef.current?.blur();
+          } else if (e.key === "Escape") {
+            // React delegates at the document root, where the Panel also
+            // listens — stopPropagation alone can't shield it
+            e.stopPropagation();
+            e.nativeEvent.stopImmediatePropagation();
+            cancelRef.current = true;
+            refocusRef.current = true;
+            inputRef.current?.blur();
+          }
+        }}
+        className="tnum w-16 rounded-[3px] border-none bg-[color-mix(in_oklab,var(--brand)_7%,transparent)] p-0 font-mono text-[12.5px] outline-none [appearance:textfield] placeholder:text-faint [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+      />
+      <span className="font-mono text-[12.5px] text-faint">pts</span>
+    </span>
+  );
+}
+
 export function TaskPanel({
-  task,
+  task: taskProp,
   open,
   onClose,
   done,
   onToggleDone,
   onEdit,
   nowISO,
+  subjects,
+  types,
 }: {
   task: TaskFull | null;
   open: boolean;
@@ -65,6 +213,9 @@ export function TaskPanel({
   onToggleDone: () => void;
   onEdit: (task: TaskFull) => void;
   nowISO: string;
+  /** editor data for the inline pickers — absent keeps those rows read-only */
+  subjects?: SubjectFull[];
+  types?: TaskType[];
 }) {
   const isAdmin = useIsAdmin();
   const toast = useToast();
@@ -80,6 +231,24 @@ export function TaskPanel({
   const [series, setSeries] = useState<
     (TaskSeries & { total: number; upcomingOpen: number }) | null
   >(null);
+  const [picker, setPicker] = useState<"due" | "type" | "subject" | null>(null);
+  const [dueDraft, setDueDraft] = useState("");
+  const dueRef = useRef<HTMLButtonElement>(null);
+  const typeRef = useRef<HTMLButtonElement>(null);
+  const subjectRef = useRef<HTMLButtonElement>(null);
+  // optimistic overlay — a committed inline edit shows instantly; the server
+  // refresh (or a failure) reconciles it
+  const [override, setOverride] = useState<{ id: number; patch: Partial<TaskFull> } | null>(null);
+
+  // The Panel plays its own exit animation on close. The callers clear the
+  // selected task the moment they close, which would unmount this content
+  // and skip that animation — so retain the last shown task and render from
+  // that snapshot while it animates out.
+  const [snap, setSnap] = useState(taskProp);
+  useEffect(() => {
+    if (taskProp) setSnap(taskProp);
+  }, [taskProp]);
+  const task = taskProp ?? snap;
 
   // reset the inline forms whenever a different task opens
   useEffect(() => {
@@ -90,6 +259,8 @@ export function TaskPanel({
       setMoveNote(task.note ?? "");
       setCancelling(false);
       setCancelReason("");
+      setPicker(null);
+      setOverride(null);
     }
   }, [task]);
 
@@ -107,13 +278,57 @@ export function TaskPanel({
     };
   }, [seriesId]);
 
+  // null only when no task has ever been shown — after that the snapshot
+  // keeps the Panel mounted so its exit animation can play
   if (!task) return null;
+
+  // what the panel shows: the task with any optimistic inline edits on top
+  const t = override && override.id === task.id ? { ...task, ...override.patch } : task;
+
+  const tomorrowISO = toISODate(addDays(now, 1));
+  // "next week" = the coming Monday; on weekends schoolWeekMonday already is it
+  const weekMonday = schoolWeekMonday(now);
+  const nextWeekISO = toISODate(
+    weekMonday.getTime() > now.getTime() ? weekMonday : addDays(weekMonday, 7)
+  );
 
   function act(run: () => Promise<{ ok: boolean; error?: string }>, okMsg: string) {
     start(async () => {
       const res = await run();
       if (res.ok) toast.success(okMsg);
       else toast.error(res.error ?? "Something went wrong.");
+    });
+  }
+
+  function commitPatch(patch: TaskPatch, shown: Partial<TaskFull>, okMsg: string) {
+    const id = task!.id;
+    setOverride((o) => ({ id, patch: { ...(o && o.id === id ? o.patch : null), ...shown } }));
+    start(async () => {
+      const res = await patchTask(id, patch);
+      if (res.ok) toast.success(okMsg);
+      else {
+        setOverride(null);
+        toast.error(res.error ?? "Something went wrong.");
+      }
+    });
+  }
+
+  // one-click move — same defaults as the move form: tentative, note kept
+  function quickMove(toDate: string) {
+    if (!isISODate(toDate)) {
+      toast.error("Pick a valid new date.");
+      return;
+    }
+    const id = task!.id;
+    setPicker(null);
+    setOverride((o) => ({ id, patch: { ...(o && o.id === id ? o.patch : null), dueDate: toDate } }));
+    start(async () => {
+      const res = await moveTask(id, toDate, { tentative: true, note: task!.note });
+      if (res.ok) toast.success("Moved — marked unconfirmed");
+      else {
+        setOverride(null);
+        toast.error(res.error ?? "Couldn't move the task.");
+      }
     });
   }
 
@@ -192,11 +407,16 @@ export function TaskPanel({
     <Panel
       open={open}
       onClose={onClose}
-      title={task.title}
+      modal={false}
+      title={
+        <InlineText
+          value={t.title}
+          disabled={!isAdmin}
+          onCommit={(v) => commitPatch({ title: v }, { title: v }, "Title updated")}
+        />
+      }
       description={
-        task.secondarySubject
-          ? `${task.subject.name} × ${task.secondarySubject.name}`
-          : task.subject.name
+        t.secondarySubject ? `${t.subject.name} × ${t.secondarySubject.name}` : t.subject.name
       }
       footer={
         <>
@@ -221,15 +441,102 @@ export function TaskPanel({
         {/* properties */}
         <dl className="space-y-2.5">
           <Property label="Type">
-            <HueBadge hue={task.type.hue}>{task.type.short}</HueBadge>
-            <span className="text-[13px] text-muted">{task.type.name}</span>
+            {isAdmin && types ? (
+              <>
+                <button
+                  ref={typeRef}
+                  type="button"
+                  aria-haspopup="menu"
+                  aria-expanded={picker === "type"}
+                  onClick={() => setPicker(picker === "type" ? null : "type")}
+                  className={cn(ROW_TRIGGER, "flex-1")}
+                >
+                  <HueBadge hue={t.type.hue}>{t.type.short}</HueBadge>
+                  <span className="truncate text-[13px] text-muted">{t.type.name}</span>
+                </button>
+                <Popover open={picker === "type"} onClose={() => setPicker(null)} anchorRef={typeRef}>
+                  <PickerList label="Task type">
+                    {types.map((ty) => (
+                      <MenuItem
+                        key={ty.id}
+                        selected={ty.id === t.typeId}
+                        icon={<span style={accentStyle(ty.hue)} className="a-dot size-2 rounded-full" />}
+                        trailing={<span className="font-mono text-[10.5px] text-faint">{ty.short}</span>}
+                        onSelect={() => {
+                          setPicker(null);
+                          if (ty.id !== t.typeId)
+                            commitPatch({ typeId: ty.id }, { typeId: ty.id, type: ty }, "Type updated");
+                        }}
+                      >
+                        {ty.name}
+                      </MenuItem>
+                    ))}
+                  </PickerList>
+                </Popover>
+              </>
+            ) : (
+              <>
+                <HueBadge hue={t.type.hue}>{t.type.short}</HueBadge>
+                <span className="text-[13px] text-muted">{t.type.name}</span>
+              </>
+            )}
           </Property>
           <Property label={task.secondarySubject ? "Classes" : "Subject"}>
-            <span style={accentStyle(task.subject.hue)} className="a-dot size-2 shrink-0 rounded-full" />
-            <span className="truncate">
-              <span className="font-mono text-[12px] font-semibold">{task.subject.short}</span>
-              <span className="ml-1.5 text-muted">{task.subject.name}</span>
-            </span>
+            {isAdmin && subjects ? (
+              <>
+                <button
+                  ref={subjectRef}
+                  type="button"
+                  aria-haspopup="menu"
+                  aria-expanded={picker === "subject"}
+                  onClick={() => setPicker(picker === "subject" ? null : "subject")}
+                  className={cn(ROW_TRIGGER, "flex-1")}
+                >
+                  <span style={accentStyle(t.subject.hue)} className="a-dot size-2 shrink-0 rounded-full" />
+                  <span className="truncate">
+                    <span className="font-mono text-[12px] font-semibold">{t.subject.short}</span>
+                    <span className="ml-1.5 text-muted">{t.subject.name}</span>
+                  </span>
+                </button>
+                <Popover
+                  open={picker === "subject"}
+                  onClose={() => setPicker(null)}
+                  anchorRef={subjectRef}
+                  width={264}
+                >
+                  <PickerList label="Subject">
+                    {subjects.map((s) => (
+                      <MenuItem
+                        key={s.id}
+                        selected={s.id === t.subjectId}
+                        disabled={s.id === t.secondarySubjectId}
+                        icon={<span style={accentStyle(s.hue)} className="a-dot size-2 rounded-full" />}
+                        trailing={<span className="font-mono text-[10.5px] text-faint">{s.short}</span>}
+                        onSelect={() => {
+                          setPicker(null);
+                          if (s.id !== t.subjectId)
+                            commitPatch(
+                              { subjectId: s.id },
+                              { subjectId: s.id, subject: s },
+                              "Subject updated"
+                            );
+                        }}
+                      >
+                        {s.name}
+                      </MenuItem>
+                    ))}
+                  </PickerList>
+                </Popover>
+              </>
+            ) : (
+              <>
+                <span style={accentStyle(t.subject.hue)} className="a-dot size-2 shrink-0 rounded-full" />
+                <span className="truncate">
+                  <span className="font-mono text-[12px] font-semibold">{t.subject.short}</span>
+                  <span className="ml-1.5 text-muted">{t.subject.name}</span>
+                </span>
+              </>
+            )}
           </Property>
           {task.secondarySubject && (
             <Property label="Collab">
@@ -246,24 +553,106 @@ export function TaskPanel({
             </Property>
           )}
           <Property label="Due">
-            <span className="font-medium">{fmtDateLong(task.dueDate)}</span>
+            {isAdmin ? (
+              <>
+                <button
+                  ref={dueRef}
+                  type="button"
+                  aria-haspopup="dialog"
+                  aria-expanded={picker === "due"}
+                  onClick={() => {
+                    setDueDraft(t.dueDate);
+                    setPicker(picker === "due" ? null : "due");
+                  }}
+                  className={cn(ROW_TRIGGER, "font-medium")}
+                >
+                  {fmtDateLong(t.dueDate)}
+                </button>
+                <Popover
+                  open={picker === "due"}
+                  onClose={() => setPicker(null)}
+                  anchorRef={dueRef}
+                  width={248}
+                >
+                  <div className="space-y-2 p-1">
+                    <Input
+                      type="date"
+                      aria-label="New due date"
+                      value={dueDraft}
+                      data-autofocus
+                      onChange={(e) => setDueDraft(e.target.value)}
+                    />
+                    <div className="flex items-center gap-1.5">
+                      <Button size="sm" variant="secondary" onClick={() => quickMove(tomorrowISO)}>
+                        Tomorrow
+                      </Button>
+                      <Button size="sm" variant="secondary" onClick={() => quickMove(nextWeekISO)}>
+                        Next week
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="primary"
+                        loading={pending}
+                        className="ml-auto"
+                        onClick={() => quickMove(dueDraft)}
+                      >
+                        Move
+                      </Button>
+                    </div>
+                    <p className="px-0.5 text-[11px] leading-snug text-faint">
+                      Marked unconfirmed until the teacher confirms.
+                    </p>
+                  </div>
+                </Popover>
+              </>
+            ) : (
+              <span className="font-medium">{fmtDateLong(t.dueDate)}</span>
+            )}
             <span className="tnum ml-auto shrink-0 font-mono text-[12px] text-muted">
-              {dueLabel(task.dueDate, now, task.dueTime)}
+              {dueLabel(t.dueDate, now, dueMinOf(task))}
             </span>
           </Property>
           <Property label="Time">
-            <span className="tnum font-mono text-[12.5px]">
-              {task.dueTime !== null ? fmtMinAmPm(task.dueTime) : "End of day"}
-            </span>
+            {task.heldInClass ? (
+              <span className="flex flex-1 items-center gap-2">
+                <InfoFlag>In class</InfoFlag>
+                <span className="tnum font-mono text-[12.5px] text-muted">
+                  {task.dueTime !== null
+                    ? fmtMinAmPm(task.dueTime)
+                    : task.classMeeting
+                      ? `${
+                          (task.classMeeting.subjectId === task.secondarySubjectId
+                            ? task.secondarySubject
+                            : task.subject
+                          )?.short ?? task.subject.short
+                        } · ${fmtMinAmPm(task.classMeeting.start)}–${fmtMinAmPm(task.classMeeting.end)}`
+                      : "when the class meets"}
+                </span>
+              </span>
+            ) : (
+              <span className="tnum font-mono text-[12.5px]">
+                {task.dueTime !== null ? fmtMinAmPm(task.dueTime) : "End of day"}
+              </span>
+            )}
           </Property>
-          {task.points !== null && (
+          {(task.points !== null || isAdmin) && (
             <Property label="Points">
-              <span className="tnum font-mono text-[12.5px]">{task.points} pts</span>
+              {isAdmin ? (
+                <PointsInline
+                  value={t.points}
+                  onCommit={(v) => commitPatch({ points: v }, { points: v }, "Points updated")}
+                />
+              ) : (
+                <span className="tnum font-mono text-[12.5px]">{task.points} pts</span>
+              )}
             </Property>
           )}
           <Property label="Status">
             <Status status={task.status} />
-            {task.doneInClass && task.status !== "cancelled" && <OkFlag>done in class</OkFlag>}
+            {task.doneInClass && task.status !== "cancelled" && <OkFlag>Done in class</OkFlag>}
+            {task.heldInClass && !task.doneInClass && task.status !== "cancelled" && (
+              <InfoFlag>In class</InfoFlag>
+            )}
           </Property>
         </dl>
 
@@ -316,7 +705,7 @@ export function TaskPanel({
               {fmtDateMed(task.dueDate)}
             </span>
             {task.status === "tentative" && (
-              <span className="ml-auto text-[11px] font-medium text-warn-text">unconfirmed</span>
+              <span className="ml-auto text-[11px] font-medium text-warn-text">Unconfirmed</span>
             )}
           </div>
         )}
@@ -330,32 +719,28 @@ export function TaskPanel({
         )}
 
         {/* details */}
-        {task.details && (
+        {(task.details || isAdmin) && (
           <section>
-            <h3 className="mb-1.5 font-mono text-[10.5px] font-semibold uppercase tracking-[0.06em] text-faint">
-              Details
-            </h3>
-            <p className="whitespace-pre-wrap text-[13.5px] leading-relaxed text-ink/90">
-              {task.details}
-            </p>
+            <h3 className="mb-1.5 text-[11px] font-medium text-muted">Details</h3>
+            <InlineTextArea
+              value={t.details}
+              disabled={!isAdmin}
+              placeholder="Add details…"
+              onCommit={(v) => commitPatch({ details: v }, { details: v }, "Details updated")}
+              className="text-[13.5px] leading-relaxed text-ink/90"
+            />
           </section>
         )}
 
         {/* materials */}
         {task.links.length > 0 && (
           <section>
-            <h3 className="mb-1.5 font-mono text-[10.5px] font-semibold uppercase tracking-[0.06em] text-faint">
-              Materials
-            </h3>
+            <h3 className="mb-1.5 text-[11px] font-medium text-muted">Materials</h3>
             <ul className="space-y-1.5">
-              {task.links.map((link) => (
-                <li key={link.id}>
-                  <a
-                    href={link.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="group flex h-9 items-center gap-2.5 rounded-[var(--r-card)] border border-line bg-surface px-2.5 transition-colors duration-[var(--dur-1)] hover:border-line-strong hover:bg-surface-2"
-                  >
+              {task.links.map((link) => {
+                const href = safeHref(link.url);
+                const inner = (
+                  <>
                     {link.kind === "file" ? (
                       <FileText className="size-4 shrink-0 text-muted" />
                     ) : (
@@ -364,14 +749,37 @@ export function TaskPanel({
                     <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-ink">
                       {link.label}
                     </span>
-                    {link.kind === "file" ? (
-                      <Download className="size-3.5 shrink-0 text-faint transition-colors group-hover:text-muted" />
+                    {href ? (
+                      link.kind === "file" ? (
+                        <Download className="size-3.5 shrink-0 text-faint transition-colors group-hover:text-muted" />
+                      ) : (
+                        <ExternalLink className="size-3.5 shrink-0 text-faint transition-colors group-hover:text-muted" />
+                      )
+                    ) : null}
+                  </>
+                );
+                return (
+                  <li key={link.id}>
+                    {href ? (
+                      <a
+                        href={href}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="group flex h-9 items-center gap-2.5 rounded-[var(--r-card)] border border-line bg-surface px-2.5 transition-colors duration-[var(--dur-1)] hover:border-line-strong hover:bg-surface-2"
+                      >
+                        {inner}
+                      </a>
                     ) : (
-                      <ExternalLink className="size-3.5 shrink-0 text-faint transition-colors group-hover:text-muted" />
+                      <div
+                        title="This link's address isn't safe to open."
+                        className="flex h-9 items-center gap-2.5 rounded-[var(--r-card)] border border-line bg-surface px-2.5 opacity-70"
+                      >
+                        {inner}
+                      </div>
                     )}
-                  </a>
-                </li>
-              ))}
+                  </li>
+                );
+              })}
             </ul>
           </section>
         )}
@@ -379,9 +787,7 @@ export function TaskPanel({
         {/* admin quick actions */}
         {isAdmin && (
           <section className="rounded-[var(--r-card)] border border-line bg-surface/40 p-3">
-            <h3 className="mb-2.5 font-mono text-[10.5px] font-semibold uppercase tracking-[0.06em] text-faint">
-              Admin
-            </h3>
+            <h3 className="mb-2.5 text-[11px] font-medium text-muted">Admin</h3>
             {moving ? (
               <div className="anim-fade space-y-3">
                 <Field label="New date" htmlFor="move-date">

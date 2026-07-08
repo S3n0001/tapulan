@@ -31,6 +31,16 @@ export async function guarded<T>(
     refreshAll();
     return ok(data);
   } catch (err) {
-    return fail(err instanceof Error ? err.message : "Something went wrong.");
+    const message = err instanceof Error ? err.message : "Something went wrong.";
+    // leave a server-side breadcrumb — the client only ever sees `message`
+    console.error(
+      JSON.stringify({
+        level: "error",
+        action: "server-action",
+        message,
+        stack: err instanceof Error ? err.stack : undefined,
+      })
+    );
+    return fail(message);
   }
 }

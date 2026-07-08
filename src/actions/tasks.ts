@@ -7,13 +7,16 @@ import {
   insertTaskSeries,
   moveTaskRow,
   normalizeTaskInput,
+  normalizeTaskPatch,
+  patchTaskRow,
   setTaskDoneInClassRow,
   setTaskStatusRow,
   updateTaskRow,
   type TaskInput,
+  type TaskPatch,
 } from "@/lib/mutations/tasks";
 import { getTaskSeries } from "@/lib/queries";
-import { isISODate, toISODate } from "@/lib/domain/time";
+import { isISODate, todayISO } from "@/lib/domain/time";
 import type { RecurrenceRule } from "@/lib/domain/recurrence";
 import { TASK_STATUSES, type TaskStatus } from "@/lib/domain/types";
 import { fail, guarded, ok, type ActionResult } from "./_shared";
@@ -23,7 +26,7 @@ import { fail, guarded, ok, type ActionResult } from "./_shared";
  * lives in `lib/mutations/tasks` and is shared with the CLI API routes.
  */
 
-export type { TaskInput, TaskLinkInput } from "@/lib/mutations/tasks";
+export type { TaskInput, TaskLinkInput, TaskPatch } from "@/lib/mutations/tasks";
 
 export async function createTask(input: TaskInput): Promise<ActionResult<{ id: number }>> {
   const clean = normalizeTaskInput(input);
@@ -35,6 +38,13 @@ export async function updateTask(id: number, input: TaskInput): Promise<ActionRe
   const clean = normalizeTaskInput(input);
   if (typeof clean === "string") return fail(clean);
   return guarded(() => updateTaskRow(id, clean));
+}
+
+/** Partially update a task — only the provided fields change (inline edits). */
+export async function patchTask(id: number, patch: TaskPatch): Promise<ActionResult> {
+  const clean = normalizeTaskPatch(patch);
+  if (typeof clean === "string") return fail(clean);
+  return guarded(() => patchTaskRow(id, clean));
 }
 
 /**
@@ -53,12 +63,12 @@ export async function createTaskSeries(
 
 /** Delete a series — its upcoming open occurrences go; past/done ones stay. */
 export async function deleteTaskSeries(id: number): Promise<ActionResult<{ deleted: number }>> {
-  return guarded(() => deleteTaskSeriesRow(id, toISODate(new Date())));
+  return guarded(() => deleteTaskSeriesRow(id, todayISO()));
 }
 
 /** Describe a series for the task panel (rule + occurrence counts). */
 export async function describeTaskSeries(id: number) {
-  return ok(getTaskSeries(id, toISODate(new Date())));
+  return ok(getTaskSeries(id, todayISO()));
 }
 
 /**

@@ -1,7 +1,8 @@
 import "server-only";
-import { createHmac, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
-import { cookies } from "next/headers";
-import { getMeta, setMeta } from "@/lib/db";
+import { createHmac, timingSafeEqual } from "node:crypto";
+import { headers as nextHeaders, cookies } from "next/headers";
+import { getDb, getMeta, setMeta } from "@/lib/db";
+import { hashPassword, verifyPassword } from "@/lib/auth/password";
 
 /**
  * Single shared admin password, verified server-side (scrypt). A logged-in
@@ -12,19 +13,7 @@ import { getMeta, setMeta } from "@/lib/db";
 const SESSION_COOKIE = "tapulan_admin";
 const SESSION_DAYS = 30;
 
-export function hashPassword(password: string): string {
-  const salt = randomBytes(16).toString("hex");
-  const hash = scryptSync(password, salt, 64).toString("hex");
-  return `${salt}:${hash}`;
-}
-
-export function verifyPassword(password: string, stored: string): boolean {
-  const [salt, expected] = stored.split(":");
-  if (!salt || !expected) return false;
-  const actual = scryptSync(password, salt, 64);
-  const expectedBuf = Buffer.from(expected, "hex");
-  return actual.length === expectedBuf.length && timingSafeEqual(actual, expectedBuf);
-}
+export { hashPassword, verifyPassword };
 
 export function checkAdminPassword(password: string): boolean {
   const stored = getMeta("admin_password");
@@ -33,6 +22,95 @@ export function checkAdminPassword(password: string): boolean {
 
 export function setAdminPassword(password: string): void {
   setMeta("admin_password", hashPassword(password));
+}
+
+// ---------------------------------------------------------- rate limiting
+
+/**
+ * Shared login rate limiter for both the web login action and the CLI
+ * pairing route — one counter per client IP, persisted in SQLite so a
+ * redeploy (or serverless cold start) doesn't reset attackers back to zero.
+ * The lockout window is fixed-length and does NOT extend on every attempt
+ * while already locked out, so a flood of requests can't turn a 60s lockout
+ * into a permanent one for the real admin.
+ */
+const MAX_ATTEMPTS = 6;
+const LOCK_MS = 60_000;
+const FAIL_DELAY_MS = 300;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** Best-effort client IP; falls back to a constant only when none is known. */
+export async function clientIpFromHeaders(): Promise<string> {
+  const store = await nextHeaders();
+  return ipFromHeaderGetter((name) => store.get(name)) ?? "unknown";
+}
+
+export function clientIpFromRequest(req: Request): string {
+  return ipFromHeaderGetter((name) => req.headers.get(name)) ?? "unknown";
+}
+
+function ipFromHeaderGetter(get: (name: string) => string | null): string | null {
+  const forwarded = get("x-forwarded-for");
+  if (forwarded) {
+    const first = forwarded.split(",")[0]?.trim();
+    if (first) return first;
+  }
+  const real = get("x-real-ip");
+  if (real) return real.trim();
+  return null;
+}
+
+interface LoginGate {
+  count: number;
+  until: number;
+}
+
+function getLoginGate(key: string): LoginGate {
+  const row = getDb()
+    .prepare("SELECT count, until FROM login_attempts WHERE key = ?")
+    .get(key) as { count: number; until: number } | undefined;
+  return row ? { count: row.count, until: row.until } : { count: 0, until: 0 };
+}
+
+function putLoginGate(key: string, gate: LoginGate): void {
+  getDb()
+    .prepare(
+      "INSERT INTO login_attempts (key, count, until) VALUES (?, ?, ?) " +
+        "ON CONFLICT(key) DO UPDATE SET count = excluded.count, until = excluded.until"
+    )
+    .run(key, gate.count, gate.until);
+}
+
+/** Returns a "try again in Ns" message if `key` is currently locked out. */
+export function checkLoginLockout(key: string): string | null {
+  const now = Date.now();
+  const gate = getLoginGate(key);
+  if (gate.until > now && gate.count >= MAX_ATTEMPTS) {
+    return `Too many attempts. Try again in ${Math.ceil((gate.until - now) / 1000)}s.`;
+  }
+  return null;
+}
+
+/**
+ * Record a failed login attempt and wait a short delay before returning.
+ * The lockout window is only (re)started when a fresh window begins —
+ * repeated failures during an active lockout keep the same `until`, so
+ * continuous POSTs can't push the lockout forward indefinitely.
+ */
+export async function recordLoginFailure(key: string): Promise<void> {
+  const now = Date.now();
+  const gate = getLoginGate(key);
+  const next: LoginGate =
+    gate.until > now ? { count: gate.count + 1, until: gate.until } : { count: 1, until: now + LOCK_MS };
+  putLoginGate(key, next);
+  await sleep(FAIL_DELAY_MS);
+}
+
+export function clearLoginFailures(key: string): void {
+  getDb().prepare("DELETE FROM login_attempts WHERE key = ?").run(key);
 }
 
 // ---------------------------------------------------------------- session

@@ -14,6 +14,42 @@ export const runtime = "nodejs";
 
 const MAX_BYTES = 25 * 1024 * 1024; // 25 MB — printouts, slides, PDFs
 
+/**
+ * Extension → accepted MIME types, matching what /api/files/[id]/[name] can
+ * serve back out. Anything not on this list is rejected — in particular
+ * .svg and .html/.htm are never accepted, even if the browser reports a
+ * "safe" MIME type for them, since either can execute script when opened.
+ */
+const ALLOWED_TYPES: Record<string, string[]> = {
+  ".pdf": ["application/pdf"],
+  ".png": ["image/png"],
+  ".jpg": ["image/jpeg"],
+  ".jpeg": ["image/jpeg"],
+  ".gif": ["image/gif"],
+  ".webp": ["image/webp"],
+  ".txt": ["text/plain"],
+  ".csv": ["text/csv", "application/vnd.ms-excel", "text/plain"],
+  ".doc": ["application/msword"],
+  ".docx": [
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/zip",
+  ],
+  ".xls": ["application/vnd.ms-excel"],
+  ".xlsx": [
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "application/zip",
+  ],
+  ".ppt": ["application/vnd.ms-powerpoint"],
+  ".pptx": [
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    "application/zip",
+  ],
+  ".zip": ["application/zip", "application/x-zip-compressed"],
+};
+
+/** Never accepted regardless of declared MIME type. */
+const BLOCKED_EXTS = new Set([".svg", ".html", ".htm"]);
+
 /** Allowlist sanitizer: letters, digits, dot, underscore, space, dash. */
 function safeName(raw: string): string {
   const base = path
@@ -59,8 +95,27 @@ export async function POST(request: Request): Promise<NextResponse> {
     return NextResponse.json({ error: "Files are capped at 25 MB." }, { status: 413 });
   }
 
-  const id = randomBytes(8).toString("hex");
   const name = safeName(file.name);
+  const ext = path.extname(name).toLowerCase();
+  const declaredType = (file.type || "").split(";")[0].trim().toLowerCase();
+  const acceptedTypes = ALLOWED_TYPES[ext];
+  if (BLOCKED_EXTS.has(ext) || !acceptedTypes) {
+    return NextResponse.json(
+      { error: `File type "${ext || "unknown"}" isn't allowed.` },
+      { status: 415 }
+    );
+  }
+  // Some browsers send an empty/generic type for less common extensions
+  // (e.g. .csv from certain OSes) — only reject a declared type that's
+  // both present and not on the allowlist for this extension.
+  if (declaredType && declaredType !== "application/octet-stream" && !acceptedTypes.includes(declaredType)) {
+    return NextResponse.json(
+      { error: `File type "${declaredType}" doesn't match ".${ext.slice(1)}".` },
+      { status: 415 }
+    );
+  }
+
+  const id = randomBytes(8).toString("hex");
   const dataDir = process.env.DATA_DIR || path.join(process.cwd(), "data");
   const dir = path.join(dataDir, "uploads", id);
   await fs.mkdir(dir, { recursive: true });

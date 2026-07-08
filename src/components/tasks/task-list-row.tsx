@@ -2,10 +2,11 @@
 
 import { Paperclip, Repeat } from "lucide-react";
 import type { TaskFull } from "@/lib/domain/types";
+import { dueMinOf } from "@/lib/domain/tasks";
 import { dueLabel, dueTone, type DueTone } from "@/lib/domain/time";
 import { accentStyle } from "@/lib/domain/hues";
 import { cn } from "@/lib/utils";
-import { HueBadge, MutedFlag, OkFlag, WarnFlag } from "@/components/ui/badge";
+import { HueBadge, InfoFlag, MutedFlag, OkFlag, WarnFlag } from "@/components/ui/badge";
 import { DoneCheck } from "./done-check";
 
 const TONE_TEXT: Record<DueTone, string> = {
@@ -38,7 +39,7 @@ export function TaskListRow({
 }) {
   const cancelled = task.status === "cancelled";
   const complete = done || task.status === "done" || task.doneInClass;
-  const tone: DueTone = complete || cancelled ? "normal" : dueTone(task.dueDate, now, task.dueTime);
+  const tone: DueTone = complete || cancelled ? "normal" : dueTone(task.dueDate, now, dueMinOf(task));
 
   return (
     <div
@@ -82,13 +83,17 @@ export function TaskListRow({
           )}
           {cancelled ? (
             <span title={task.cancelReason ?? undefined}>
-              <MutedFlag>cancelled</MutedFlag>
+              <MutedFlag>Cancelled</MutedFlag>
             </span>
           ) : (
             <>
-              {task.doneInClass && <OkFlag>in class</OkFlag>}
-              {task.movedFrom && <WarnFlag>moved</WarnFlag>}
-              {task.status === "tentative" && <WarnFlag>unconfirmed</WarnFlag>}
+              {task.doneInClass ? (
+                <OkFlag>Done in class</OkFlag>
+              ) : (
+                task.heldInClass && <InfoFlag>In class</InfoFlag>
+              )}
+              {task.movedFrom && <WarnFlag>Moved</WarnFlag>}
+              {task.status === "tentative" && <WarnFlag>Unconfirmed</WarnFlag>}
             </>
           )}
         </span>
@@ -121,7 +126,7 @@ export function TaskListRow({
               TONE_TEXT[tone]
             )}
           >
-            {cancelled ? "—" : dueLabel(task.dueDate, now, task.dueTime)}
+            {cancelled ? "—" : dueLabel(task.dueDate, now, dueMinOf(task))}
           </span>
         </span>
       </button>

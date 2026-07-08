@@ -20,7 +20,7 @@ export default async function TodayPage() {
       dayPeriods={dayPeriods}
       day={day}
       isToday={isToday}
-      dateISO={date.toISOString()}
+      dateISO={toISODate(date)}
       mark={mark}
       tasks={tasks}
       nowISO={now.toISOString()}

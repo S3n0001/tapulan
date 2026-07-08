@@ -1,5 +1,8 @@
 import "server-only";
+import { cache } from "react";
 import { getDb, getMeta } from "@/lib/db";
+import { classMeetingFor } from "@/lib/domain/schedule";
+import { sortMinOf } from "@/lib/domain/tasks";
 import type {
   DayMark,
   DayMarkKind,
@@ -69,6 +72,7 @@ interface TaskRow {
   due_time: number | null;
   status: Task["status"];
   done_in_class: number;
+  held_in_class: number;
   moved_from: string | null;
   cancel_reason: string | null;
   note: string | null;
@@ -126,6 +130,7 @@ function mapTask(row: TaskRow): Task {
     dueTime: row.due_time,
     status: row.status,
     doneInClass: !!row.done_in_class,
+    heldInClass: !!row.held_in_class,
     movedFrom: row.moved_from,
     cancelReason: row.cancel_reason,
     note: row.note,
@@ -150,14 +155,14 @@ export function getSettings(): Settings {
   };
 }
 
-export function getTeachers(): Teacher[] {
+export const getTeachers = cache((): Teacher[] => {
   return (getDb().prepare("SELECT * FROM teachers ORDER BY name").all() as TeacherRow[]).map(
     mapTeacher
   );
-}
+});
 
 /** Subjects with teacher resolved. `strand` filters to core + that strand. */
-export function getSubjects(strand?: StrandCode | null): SubjectFull[] {
+export const getSubjects = cache((strand?: StrandCode | null): SubjectFull[] => {
   const db = getDb();
   const rows = (
     strand
@@ -174,14 +179,14 @@ export function getSubjects(strand?: StrandCode | null): SubjectFull[] {
     ...mapSubject(row),
     teacher: row.teacher_id !== null ? (teachers.get(row.teacher_id) ?? null) : null,
   }));
-}
+});
 
 /**
  * The week's periods with subject + teacher resolved, ordered by day and
  * start time. With a strand: that strand's view (core rows + its splits).
  * Without: every row (admin).
  */
-export function getPeriods(strand?: StrandCode | null): PeriodFull[] {
+export const getPeriods = cache((strand?: StrandCode | null): PeriodFull[] => {
   const db = getDb();
   const rows = (
     strand
@@ -213,7 +218,7 @@ export function getPeriods(strand?: StrandCode | null): PeriodFull[] {
       teacher: override ?? subject?.teacher ?? null,
     };
   });
-}
+});
 
 // ------------------------------------------------------------- day marks
 
@@ -242,9 +247,9 @@ export function getDayMarkMap(fromISO: string, toISO: string): Map<string, DayMa
   return new Map(rows.map((r) => [r.date, r]));
 }
 
-export function getTaskTypes(): TaskType[] {
+export const getTaskTypes = cache((): TaskType[] => {
   return getDb().prepare("SELECT * FROM task_types ORDER BY sort, id").all() as TaskType[];
-}
+});
 
 interface TaskSeriesRow {
   id: number;
@@ -327,18 +332,27 @@ export function getTasks(strand?: StrandCode | null): TaskFull[] {
 
   const subjects = new Map(getSubjects().map((s) => [s.id, s]));
   const types = new Map(getTaskTypes().map((t) => [t.id, t]));
+  // meeting times for the same strand view — used to resolve when a held-in-
+  // class task actually happens (its subject's period on that due date)
+  const periods = getPeriods(strand);
 
-  const linkRows = db
-    .prepare("SELECT * FROM task_links ORDER BY task_id, sort, id")
-    .all() as TaskLinkRow[];
   const linksByTask = new Map<number, TaskLink[]>();
-  for (const row of linkRows) {
-    const list = linksByTask.get(row.task_id) ?? [];
-    list.push(mapLink(row));
-    linksByTask.set(row.task_id, list);
+  if (rows.length) {
+    const ids = rows.map((r) => r.id);
+    const placeholders = ids.map(() => "?").join(",");
+    const linkRows = db
+      .prepare(
+        `SELECT * FROM task_links WHERE task_id IN (${placeholders}) ORDER BY task_id, sort, id`
+      )
+      .all(...ids) as TaskLinkRow[];
+    for (const row of linkRows) {
+      const list = linksByTask.get(row.task_id) ?? [];
+      list.push(mapLink(row));
+      linksByTask.set(row.task_id, list);
+    }
   }
 
-  return rows
+  const full = rows
     .map((row) => {
       const subject = subjects.get(row.subject_id);
       const type = types.get(row.type_id);
@@ -347,15 +361,31 @@ export function getTasks(strand?: StrandCode | null): TaskFull[] {
         row.secondary_subject_id !== null
           ? (subjects.get(row.secondary_subject_id) ?? null)
           : null;
+      const task = mapTask(row);
       return {
-        ...mapTask(row),
+        ...task,
         subject,
         secondarySubject,
         type,
         links: linksByTask.get(row.id) ?? [],
+        classMeeting: task.heldInClass ? classMeetingFor(task, periods) : null,
       };
     })
     .filter((t): t is TaskFull => t !== null);
+
+  // the SQL ORDER BY can't see classMeeting (resolved above from the
+  // schedule), so a held-in-class task with no explicit due_time would sort
+  // to end-of-day instead of its actual class time — re-sort now that each
+  // task's real clock minute is known.
+  full.sort((a, b) => {
+    if (a.dueDate !== b.dueDate) return a.dueDate < b.dueDate ? -1 : 1;
+    const am = sortMinOf(a);
+    const bm = sortMinOf(b);
+    if (am !== bm) return am - bm;
+    return a.id - b.id;
+  });
+
+  return full;
 }
 
 /** Open (actionable) task count for the sidebar badge. */

@@ -4,12 +4,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
 import { taskSubjectIds, type DayMark, type PeriodFull, type TaskFull } from "@/lib/domain/types";
-import { minutesOf, fmtMin } from "@/lib/domain/time";
+import { minutesOf, fmtMin, fromISODate } from "@/lib/domain/time";
 import { accentStyle } from "@/lib/domain/hues";
 import { DAY_MARK_HUE, DAY_MARK_SHORT, dayMarkTitle } from "@/lib/domain/day-mark";
 import { useNow } from "@/hooks/use-now";
 import { cn } from "@/lib/utils";
-import { Toolbar } from "@/components/shell/toolbar";
+import { ViewChrome } from "@/components/shell/view-chrome";
 import { EmptyState } from "@/components/ui/empty";
 import { DueFlag } from "@/components/tasks/due-flag";
 import { useClassDetail } from "@/components/classes/class-detail";
@@ -198,14 +198,13 @@ export function WeekView({
   const weekLabel =
     days.length > 0
       ? `${new Intl.DateTimeFormat("en-PH", { month: "short", day: "numeric" }).format(
-          new Date(days[0].iso)
+          fromISODate(days[0].iso)
         )} – ${new Intl.DateTimeFormat("en-PH", { day: "numeric" }).format(
-          new Date(days[days.length - 1].iso)
+          fromISODate(days[days.length - 1].iso)
         )}`
       : "";
 
-  const relLabel =
-    weekOffset === 0 ? "This week" : weekOffset === 1 ? "Next week" : weekOffset === -1 ? "Last week" : weekLabel;
+  const relLabel = weekLabel;
 
   const weekNav = (
     <div className="flex items-center gap-0.5">
@@ -236,19 +235,26 @@ export function WeekView({
 
   if (periods.length === 0) {
     return (
-      <div className="anim-view">
-        <Toolbar title="Week" meta={<span>{relLabel}</span>} right={weekNav} />
+      <ViewChrome
+        title="Week"
+        icon={CalendarDays}
+        meta={<span className="tnum">{relLabel}</span>}
+        right={weekNav}
+      >
         <EmptyState icon={CalendarDays} title="No schedule yet">
           Your week will fill in here once your schedule is set.
         </EmptyState>
-      </div>
+      </ViewChrome>
     );
   }
 
   return (
-    <div className="anim-view lg:flex lg:h-full lg:min-h-0 lg:flex-col">
-      <Toolbar title="Week" meta={<span>{relLabel}</span>} right={weekNav} className="shrink-0">
-        {/* mobile day tabs */}
+    <ViewChrome
+      title="Week"
+      icon={CalendarDays}
+      meta={<span className="tnum">{relLabel}</span>}
+      right={weekNav}
+      mobileSubrow={
         <div role="tablist" aria-label="Day" className="grid grid-cols-5 lg:hidden">
           {days.map((d) => {
             const active = mobileDay === d.day;
@@ -293,7 +299,8 @@ export function WeekView({
             );
           })}
         </div>
-      </Toolbar>
+      }
+    >
 
       {/* ------------------------------------------------ desktop grid */}
       <div className="hidden lg:flex lg:min-h-0 lg:flex-1 lg:flex-col">
@@ -427,7 +434,7 @@ export function WeekView({
           />
         </div>
       </div>
-    </div>
+    </ViewChrome>
   );
 }
 
@@ -479,12 +486,15 @@ function NowChip({
   dayEnd: number;
   px: number;
 }) {
-  if (!visible || nowMin < dayStart || nowMin > dayEnd) return null;
+  if (!visible || nowMin < dayStart) return null;
+  // still today but past the last period — pin the chip to the bottom edge
+  // instead of hiding it, so "now" doesn't just vanish once school lets out
+  const clampedMin = Math.min(nowMin, dayEnd);
   return (
     <span
       aria-hidden
       className="tnum absolute right-1 z-10 -translate-y-1/2 rounded-[4px] bg-brand px-1 py-px font-mono text-[9px] font-semibold leading-[13px] text-on-brand transition-[top] duration-500 ease-linear"
-      style={{ top: (nowMin - dayStart) * px }}
+      style={{ top: (clampedMin - dayStart) * px }}
     >
       {fmtMin(nowMin)}
     </span>
@@ -571,9 +581,10 @@ function DayColumn({
     [periods]
   );
 
-  // a marked day has nothing "live" — the now-line would imply a running class
-  const nowVisible =
-    isToday && !mark && nowMin >= dayStart && nowMin <= dayStart + total;
+  // a marked day has nothing "live" — the now-line would imply a running class.
+  // Once nowMin runs past the bottom of the canvas it's still pinned there
+  // (clamped below) rather than disappearing — see the `top` calc.
+  const nowVisible = isToday && !mark && nowMin >= dayStart;
 
   return (
     <div
@@ -781,12 +792,14 @@ function DayColumn({
       {/* async wash / no-class slab */}
       {mark && <MarkOverlay mark={mark} />}
 
-      {/* live now line — glides on the minute tick instead of jumping */}
+      {/* live now line — glides on the minute tick instead of jumping.
+          Past the bottom of the canvas (school day over) it pins to the
+          bottom edge instead of disappearing. */}
       {nowVisible && (
         <div
           aria-hidden
           className="pointer-events-none absolute inset-x-0 z-10 transition-[top] duration-500 ease-linear"
-          style={{ top: (nowMin - dayStart) * px }}
+          style={{ top: Math.min(nowMin - dayStart, total) * px }}
         >
           <div className="h-[1.5px] bg-brand shadow-[0_0_6px_color-mix(in_oklab,var(--brand)_55%,transparent)]" />
           <div className="absolute -left-[3px] -top-[2.5px] size-[7px] rounded-full bg-brand" />

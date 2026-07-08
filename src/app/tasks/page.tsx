@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { currentStrand } from "@/lib/session";
-import { getSubjects, getTaskTypes, getTasks } from "@/lib/queries";
+import { getPeriods, getSubjects, getTaskTypes, getTasks } from "@/lib/queries";
 import { TasksView } from "@/components/tasks/tasks-view";
 
 export const metadata: Metadata = { title: "Tasks" };
@@ -15,6 +15,7 @@ export default async function TasksPage() {
       tasks={getTasks(strand)}
       subjects={getSubjects(strand)}
       types={getTaskTypes()}
+      periods={getPeriods(strand)}
       nowISO={new Date().toISOString()}
     />
   );

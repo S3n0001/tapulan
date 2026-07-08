@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { FileText, Link2, Plus, Repeat, Trash2, Upload } from "lucide-react";
+import { FileText, GraduationCap, Link2, Plus, Repeat, Trash2, Upload } from "lucide-react";
 import {
   createTask,
   createTaskSeries,
@@ -9,9 +9,18 @@ import {
   type TaskInput,
   type TaskLinkInput,
 } from "@/actions/tasks";
-import type { SubjectFull, TaskFull, TaskStatus, TaskType } from "@/lib/domain/types";
+import type { PeriodFull, SubjectFull, TaskFull, TaskStatus, TaskType } from "@/lib/domain/types";
 import { TASK_STATUSES } from "@/lib/domain/types";
-import { fmtDateMed, fromISODate, inputToMin, minToInput, toISODate } from "@/lib/domain/time";
+import { classMeetingFor } from "@/lib/domain/schedule";
+import {
+  fmtDateMed,
+  fmtMin,
+  fmtMinAmPm,
+  fromISODate,
+  inputToMin,
+  minToInput,
+  toISODate,
+} from "@/lib/domain/time";
 import {
   describeRule,
   expandRule,
@@ -49,11 +58,15 @@ interface FormState {
   dueTime: string;
   status: TaskStatus;
   doneInClass: boolean;
+  heldInClass: boolean;
   points: string;
   note: string;
   cancelReason: string;
   movedFrom: string;
   links: TaskLinkInput[];
+  // files picked but not yet uploaded — staged client-side and only POSTed
+  // to /api/upload on save, so cancelling the editor never orphans a file
+  pendingFiles: { id: string; file: File }[];
   // recurrence (new tasks only)
   repeat: "none" | RecurFreq;
   repeatInterval: string;
@@ -90,11 +103,13 @@ function initial(task: TaskFull | null, subjects: SubjectFull[], types: TaskType
       dueTime: minToInput(task.dueTime),
       status: task.status,
       doneInClass: task.doneInClass,
+      heldInClass: task.heldInClass,
       points: task.points !== null ? String(task.points) : "",
       note: task.note ?? "",
       cancelReason: task.cancelReason ?? "",
       movedFrom: task.movedFrom ?? "",
       links: task.links.map((l) => ({ label: l.label, url: l.url, kind: l.kind })),
+      pendingFiles: [],
       ...repeatDefaults,
     };
   }
@@ -108,11 +123,13 @@ function initial(task: TaskFull | null, subjects: SubjectFull[], types: TaskType
     dueTime: "",
     status: "confirmed",
     doneInClass: false,
+    heldInClass: false,
     points: "",
     note: "",
     cancelReason: "",
     movedFrom: "",
     links: [],
+    pendingFiles: [],
     ...repeatDefaults,
   };
 }
@@ -135,12 +152,15 @@ export function TaskEditor({
   task,
   subjects,
   types,
+  periods,
   open,
   onClose,
 }: {
   task: TaskFull | null;
   subjects: SubjectFull[];
   types: TaskType[];
+  /** the strand's weekly schedule — resolves when a held-in-class task happens */
+  periods: PeriodFull[];
   open: boolean;
   onClose: () => void;
 }) {
@@ -150,14 +170,23 @@ export function TaskEditor({
   const [form, setForm] = useState<FormState>(() => initial(task, subjects, types));
   const [error, setError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const weekdayPickerRef = useRef<HTMLDivElement>(null);
 
-  // reload the form whenever a different task (or "new") opens
+  // reload the form whenever a different task (or "new") opens — deliberately
+  // NOT depending on `subjects`/`types`, which are new array references on
+  // every parent re-render; keying off just `open`/`task` avoids wiping
+  // mid-edit input on an unrelated upstream re-render (reads the latest
+  // subjects/types via closure, which is fine since this only reruns on the
+  // identity change that should actually reset the form)
   useEffect(() => {
     if (open) {
       setForm(initial(task, subjects, types));
       setError(null);
     }
-  }, [open, task, subjects, types]);
+    // intentional: subjects/types are read via closure in initial() and must
+    // not retrigger the reset on every parent re-render
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, task]);
 
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) =>
     setForm((f) => ({ ...f, [key]: value }));
@@ -168,28 +197,42 @@ export function TaskEditor({
       links: f.links.map((l, i) => (i === index ? { ...l, ...patch } : l)),
     }));
 
-  async function uploadFile(file: File) {
-    setUploading(true);
-    try {
+  // stage the file locally only — the actual POST to /api/upload happens at
+  // save time (see uploadStagedFiles), so cancelling the editor never leaves
+  // an orphaned file on the data volume
+  function stageFile(file: File) {
+    setForm((f) => ({
+      ...f,
+      pendingFiles: [...f.pendingFiles, { id: `${Date.now()}-${Math.random()}`, file }],
+    }));
+    if (fileRef.current) fileRef.current.value = "";
+  }
+
+  function removeStagedFile(id: string) {
+    setForm((f) => ({ ...f, pendingFiles: f.pendingFiles.filter((p) => p.id !== id) }));
+  }
+
+  /** Upload every staged file, returning the resulting link inputs. Throws
+   *  (with a user-facing message) on the first failure so submit() can abort
+   *  the save rather than silently dropping a material. */
+  async function uploadStagedFiles(pending: { id: string; file: File }[]): Promise<TaskLinkInput[]> {
+    const out: TaskLinkInput[] = [];
+    for (const { file } of pending) {
       const body = new FormData();
       body.append("file", file);
-      const res = await fetch("/api/upload", { method: "POST", body });
+      let res: Response;
+      try {
+        res = await fetch("/api/upload", { method: "POST", body });
+      } catch {
+        throw new Error("Upload failed — check your connection.");
+      }
       const json = (await res.json()) as { url?: string; name?: string; error?: string };
       if (!res.ok || !json.url) {
-        toast.error(json.error ?? "Upload failed.");
-        return;
+        throw new Error(json.error ?? `Couldn't upload "${file.name}".`);
       }
-      setForm((f) => ({
-        ...f,
-        links: [...f.links, { label: json.name ?? "File", url: json.url!, kind: "file" }],
-      }));
-      toast.success("File attached");
-    } catch {
-      toast.error("Upload failed — check your connection.");
-    } finally {
-      setUploading(false);
-      if (fileRef.current) fileRef.current.value = "";
+      out.push({ label: json.name ?? file.name, url: json.url, kind: "file" });
     }
+    return out;
   }
 
   function submit() {
@@ -198,28 +241,61 @@ export function TaskEditor({
     if (form.secondarySubjectId !== "" && form.secondarySubjectId === form.subjectId)
       return setError("The collab class has to be a different subject.");
     if (!form.dueDate) return setError("Pick a due date.");
+
+    // recurrence must normalize cleanly before we let a series through —
+    // otherwise createTaskSeries would be called with a rule the server
+    // rejects anyway, just with a worse error path
+    if (!task && form.repeat !== "none") {
+      const normalized = normalizeRule(ruleFromForm(form));
+      if (typeof normalized === "string") {
+        setError(normalized);
+        weekdayPickerRef.current?.focus();
+        return;
+      }
+    }
     setError(null);
 
-    const input: TaskInput = {
-      title: form.title,
-      details: form.details,
-      subjectId: Number(form.subjectId),
-      secondarySubjectId: form.secondarySubjectId === "" ? null : Number(form.secondarySubjectId),
-      typeId: Number(form.typeId),
-      dueDate: form.dueDate,
-      dueTime: inputToMin(form.dueTime),
-      status: form.status,
-      doneInClass: form.doneInClass,
-      movedFrom: form.movedFrom || null,
-      cancelReason: form.cancelReason || null,
-      note: form.note || null,
-      points: form.points.trim() === "" ? null : Number(form.points),
-      links: form.links,
-    };
-
     const repeating = !task && form.repeat !== "none";
+    const pendingFiles = form.pendingFiles;
 
     start(async () => {
+      // upload any staged files first — only on a successful save do their
+      // URLs become part of the task's materials
+      let uploadedLinks: TaskLinkInput[];
+      if (pendingFiles.length > 0) {
+        setUploading(true);
+        try {
+          uploadedLinks = await uploadStagedFiles(pendingFiles);
+        } catch (err) {
+          const message = err instanceof Error ? err.message : "Upload failed.";
+          setError(message);
+          toast.error(message);
+          return;
+        } finally {
+          setUploading(false);
+        }
+      } else {
+        uploadedLinks = [];
+      }
+
+      const input: TaskInput = {
+        title: form.title,
+        details: form.details,
+        subjectId: Number(form.subjectId),
+        secondarySubjectId: form.secondarySubjectId === "" ? null : Number(form.secondarySubjectId),
+        typeId: Number(form.typeId),
+        dueDate: form.dueDate,
+        dueTime: inputToMin(form.dueTime),
+        status: form.status,
+        doneInClass: form.doneInClass,
+        heldInClass: form.heldInClass,
+        movedFrom: form.movedFrom || null,
+        cancelReason: form.cancelReason || null,
+        note: form.note || null,
+        points: form.points.trim() === "" ? null : Number(form.points),
+        links: [...form.links, ...uploadedLinks],
+      };
+
       if (repeating) {
         const res = await createTaskSeries(input, ruleFromForm(form));
         if (res.ok) {
@@ -253,6 +329,45 @@ export function TaskEditor({
       : { count: dates.length, first: dates[0], last: dates[dates.length - 1], rule: norm };
   }, [task, form]);
 
+  // held-in-class: resolve *when* it happens from the strand schedule, so the
+  // editor states the real meeting ("During FIL · Wed 9:20 AM") instead of a
+  // deadline — recomputed live as the subject or date changes
+  const heldMeeting = useMemo(() => {
+    if (!form.heldInClass || form.subjectId === "" || !form.dueDate) return null;
+    return classMeetingFor(
+      {
+        subjectId: Number(form.subjectId),
+        secondarySubjectId:
+          form.secondarySubjectId === "" ? null : Number(form.secondarySubjectId),
+        dueDate: form.dueDate,
+      },
+      periods
+    );
+  }, [form.heldInClass, form.subjectId, form.secondarySubjectId, form.dueDate, periods]);
+
+  // one honest line under the toggle: the resolved meeting, a manual override,
+  // or a warning that the subject doesn't meet that day (so it'll read "In class")
+  const heldHint = useMemo(() => {
+    if (!form.heldInClass) return null;
+    const override = inputToMin(form.dueTime);
+    if (override !== null)
+      return { warn: false, text: `In class at ${fmtMinAmPm(override)} · overriding the schedule` };
+    if (heldMeeting) {
+      const short = subjects.find((s) => s.id === heldMeeting.subjectId)?.short ?? "";
+      const wd = weekdayShort(isoWeekday(fromISODate(form.dueDate)));
+      return {
+        warn: false,
+        text: `During ${short} · ${wd} ${fmtMinAmPm(heldMeeting.start)}–${fmtMin(heldMeeting.end)}`,
+      };
+    }
+    const short = subjects.find((s) => s.id === Number(form.subjectId))?.short ?? "this class";
+    const wd = form.dueDate ? weekdayShort(isoWeekday(fromISODate(form.dueDate))) : "that day";
+    return {
+      warn: true,
+      text: `${short} doesn't meet ${wd} — it'll just read “In class.” Pick a date it meets, or set a time to pin one.`,
+    };
+  }, [form.heldInClass, form.dueTime, form.dueDate, form.subjectId, heldMeeting, subjects]);
+
   return (
     <Panel
       open={open}
@@ -273,7 +388,12 @@ export function TaskEditor({
           <Button variant="ghost" onClick={onClose}>
             Cancel
           </Button>
-          <Button variant="primary" loading={pending} onClick={submit}>
+          <Button
+            variant="primary"
+            loading={pending}
+            disabled={Boolean(preview && "error" in preview)}
+            onClick={submit}
+          >
             {task
               ? "Save changes"
               : preview && !("error" in preview)
@@ -357,15 +477,50 @@ export function TaskEditor({
               onChange={(e) => set("dueDate", e.target.value)}
             />
           </Field>
-          <Field label="Due time" hint="optional" htmlFor="t-time">
+          <Field
+            label={form.heldInClass ? "Class time" : "Due time"}
+            hint={form.heldInClass ? "optional override" : "optional"}
+            htmlFor="t-time"
+          >
             <Input
               id="t-time"
               type="time"
               value={form.dueTime}
+              placeholder={form.heldInClass ? "from schedule" : undefined}
               onChange={(e) => set("dueTime", e.target.value)}
             />
           </Field>
         </div>
+
+        {/* held-in-class — a UT/quiz sat during the class meeting: its time comes
+            from the schedule, so "end of day" never applies */}
+        {form.status !== "cancelled" && (
+          <div className="space-y-2">
+            <Checkbox
+              checked={form.heldInClass}
+              onChange={(v) => set("heldInClass", v)}
+              label={
+                <span>
+                  Held in class
+                  <span className="text-faint">
+                    {" · "}sat during the class meeting — no end-of-day deadline
+                  </span>
+                </span>
+              }
+            />
+            {form.heldInClass && heldHint && (
+              <p
+                className={cn(
+                  "anim-fade flex items-start gap-1.5 pl-6 text-[12px] leading-snug",
+                  heldHint.warn ? "text-warn-text" : "text-muted"
+                )}
+              >
+                <GraduationCap className="mt-px size-3.5 shrink-0" strokeWidth={1.75} />
+                <span>{heldHint.text}</span>
+              </p>
+            )}
+          </div>
+        )}
 
         {/* recurrence — only when creating; each occurrence becomes its own task */}
         {!task && (
@@ -394,7 +549,11 @@ export function TaskEditor({
 
             {form.repeat === "weekly" && (
               <div className="anim-fade space-y-3">
-                <div className="space-y-1.5">
+                <div
+                  ref={weekdayPickerRef}
+                  tabIndex={-1}
+                  className="space-y-1.5 outline-none"
+                >
                   <span className="text-[12px] font-medium text-muted">On these days</span>
                   <div className="flex flex-wrap gap-1.5">
                     {WEEKDAYS.map((wd) => {
@@ -639,6 +798,16 @@ export function TaskEditor({
                 </IconButton>
               </div>
             ))}
+            {form.pendingFiles.map((p) => (
+              <div key={p.id} className="flex items-center gap-2">
+                <Upload className="size-4 shrink-0 text-muted" aria-label="Pending upload" />
+                <span className="flex-1 truncate text-[13px] text-ink">{p.file.name}</span>
+                <span className="shrink-0 text-[11px] text-faint">uploads on save</span>
+                <IconButton aria-label="Remove pending file" onClick={() => removeStagedFile(p.id)}>
+                  <Trash2 className="size-3.5" />
+                </IconButton>
+              </div>
+            ))}
             <div className="flex gap-2">
               <Button
                 size="sm"
@@ -664,7 +833,7 @@ export function TaskEditor({
                 aria-label="Upload a material file"
                 onChange={(e) => {
                   const file = e.target.files?.[0];
-                  if (file) void uploadFile(file);
+                  if (file) stageFile(file);
                 }}
               />
             </div>

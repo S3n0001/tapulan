@@ -25,9 +25,7 @@ function Section({
 }) {
   return (
     <section className="border-b border-line px-3.5 py-4 last:border-b-0 lg:px-4">
-      <h3 className="font-mono text-[10.5px] font-semibold uppercase tracking-[0.06em] text-faint">
-        {title}
-      </h3>
+      <h3 className="text-[11px] font-medium text-muted">{title}</h3>
       {hint && <p className="mt-0.5 text-[12px] text-muted">{hint}</p>}
       <div className="mt-3 max-w-[420px]">{children}</div>
     </section>

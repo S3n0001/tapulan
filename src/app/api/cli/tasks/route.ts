@@ -19,6 +19,7 @@ function light(t: ReturnType<typeof getTasks>[number]) {
     due: t.dueDate,
     time: t.dueTime,
     status: t.status,
+    heldInClass: t.heldInClass,
     points: t.points,
     movedFrom: t.movedFrom,
     cancelReason: t.cancelReason,
@@ -49,6 +50,7 @@ interface CreateBody {
   points?: unknown;
   tentative?: unknown;
   doneInClass?: unknown; // finished during class, section-wide
+  heldInClass?: unknown; // sat during class (UT/quiz) — time from the schedule
   links?: unknown; // [{ label?, url }]
 }
 
@@ -110,6 +112,7 @@ export async function POST(req: Request) {
     dueTime: typeof body.time === "string" && body.time ? inputToMin(body.time) : null,
     status: body.tentative === true ? "tentative" : "confirmed",
     doneInClass: body.doneInClass === true,
+    heldInClass: body.heldInClass === true,
     movedFrom: null,
     cancelReason: null,
     note: typeof body.note === "string" && body.note.trim() ? body.note : null,
@@ -134,5 +137,6 @@ export async function POST(req: Request) {
     type: type.short,
     due: clean.dueDate,
     status: clean.status,
+    heldInClass: clean.heldInClass,
   });
 }

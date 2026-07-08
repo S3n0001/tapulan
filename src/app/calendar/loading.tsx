@@ -1,4 +1,5 @@
-import { Toolbar } from "@/components/shell/toolbar";
+import { CalendarRange } from "lucide-react";
+import { ViewChrome } from "@/components/shell/view-chrome";
 import { Skeleton } from "@/components/ui/skeleton";
 
 /** Calendar, loading — the month grid's exact geometry, quietly pulsing. */
@@ -12,27 +13,26 @@ const CHIP_W = ["85%", "62%", "74%"];
 
 export default function CalendarLoading() {
   return (
-    <div aria-busy="true" className="flex flex-col lg:h-full lg:min-h-0">
+    <ViewChrome
+      title="Calendar"
+      icon={CalendarRange}
+      meta={
+        <>
+          <Skeleton className="h-3.5 w-20" />
+          <Skeleton className="h-3.5 w-12" />
+        </>
+      }
+      right={
+        <span className="flex items-center gap-1.5">
+          <Skeleton className="h-6 w-24 rounded-[var(--r-chip)]" />
+          <Skeleton className="size-7 rounded-[var(--r-control)]" />
+          <Skeleton className="size-7 rounded-[var(--r-control)]" />
+        </span>
+      }
+    >
       <span role="status" className="sr-only">
         Loading calendar…
       </span>
-      <Toolbar
-        title="Calendar"
-        meta={
-          <>
-            <Skeleton className="h-3 w-20" />
-            <Skeleton className="h-3 w-12" />
-          </>
-        }
-        right={
-          <span className="flex items-center gap-1.5">
-            <Skeleton className="h-6 w-24 rounded-[var(--r-chip)]" />
-            <Skeleton className="size-7 rounded-[var(--r-control)]" />
-            <Skeleton className="size-7 rounded-[var(--r-control)]" />
-          </span>
-        }
-        className="shrink-0"
-      />
 
       {/* desktop month grid */}
       <div className="hidden lg:flex lg:min-h-0 lg:flex-1 lg:flex-col">
@@ -40,7 +40,7 @@ export default function CalendarLoading() {
           {Array.from({ length: 7 }, (_, i) => (
             <div
               key={i}
-              className={`flex h-8 items-center justify-end px-2 ${i > 0 ? "border-l border-line/60" : ""}`}
+              className={`flex h-8 items-center px-2 ${i > 0 ? "border-l border-line/60" : ""}`}
             >
               <Skeleton className="h-2.5 w-7" />
             </div>
@@ -57,7 +57,7 @@ export default function CalendarLoading() {
                 i % 7 > 0 ? "border-l border-line/60" : ""
               }`}
             >
-              <div className="flex h-6 shrink-0 items-center justify-end px-1.5 pt-1">
+              <div className="flex h-6 shrink-0 items-center px-2 pt-1">
                 <Skeleton className="h-3 w-4" />
               </div>
               <div className="flex flex-col gap-[2px] px-1 pb-1">
@@ -109,6 +109,6 @@ export default function CalendarLoading() {
           ))}
         </div>
       </div>
-    </div>
+    </ViewChrome>
   );
 }

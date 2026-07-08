@@ -55,7 +55,31 @@ function deleteConfig() {
 
 class CliError extends Error {}
 
+const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "::1", "[::1]"]);
+
+/**
+ * A plain-http URL means the admin password (login) or bearer token (every
+ * other call) travels the network in the clear — fine for localhost, never
+ * fine for anything else. Refuse rather than warn: there's no good reason
+ * to send real credentials over http to a non-local host.
+ */
+function assertSecureTarget(rawUrl) {
+  let parsed;
+  try {
+    parsed = new URL(rawUrl);
+  } catch {
+    throw new CliError(`"${rawUrl}" isn't a valid URL.`);
+  }
+  if (parsed.protocol === "https:") return;
+  if (parsed.protocol === "http:" && LOCAL_HOSTS.has(parsed.hostname)) return;
+  throw new CliError(
+    `Refusing to send credentials to ${rawUrl} — it's plain http and not localhost.\n` +
+      `  Use an https:// URL, or pair with a localhost/127.0.0.1 address for local dev.`
+  );
+}
+
 async function api(cfg, pathname, { method = "GET", body, token = cfg?.token } = {}) {
+  assertSecureTarget(cfg.url);
   const url = `${cfg.url}${pathname}`;
   let res;
   try {
@@ -319,6 +343,7 @@ async function cmdAdd(argv) {
     "--details": F("details"),
     "--link": F("link"),
     "--tentative": F("tentative", false),
+    "--in-class": F("inClass", false),
   });
   const cfg = requireLogin();
   const meta = await api(cfg, "/api/cli/meta");
@@ -371,6 +396,7 @@ async function cmdAdd(argv) {
     note: flags.note ?? null,
     points: flags.points !== undefined ? Number(flags.points) : null,
     tentative: Boolean(flags.tentative),
+    heldInClass: Boolean(flags.inClass),
     links: flags.link ? [{ url: flags.link }] : [],
   };
   if (flags.points !== undefined && !Number.isFinite(body.points)) {
@@ -382,7 +408,8 @@ async function cmdAdd(argv) {
   console.log(
     `${green("✓")} Added ${dim(`#${created.id}`)} ${bold(created.type.toUpperCase())} ${created.title}` +
       ` ${dim("·")} ${created.subject} ${dim("·")} ${TONE[label.tone](label.text)}` +
-      (created.status === "tentative" ? ` ${yellow("· unconfirmed")}` : "")
+      (created.status === "tentative" ? ` ${yellow("· unconfirmed")}` : "") +
+      (created.heldInClass ? ` ${blue("· in class")}` : "")
   );
 }
 
@@ -408,6 +435,7 @@ async function cmdList(argv) {
   for (const t of tasks) {
     const label = dueLabel(t.due);
     const flagsCol = [
+      t.heldInClass ? blue("in class") : null,
       t.movedFrom ? yellow("moved") : null,
       t.status === "tentative" ? yellow("unconfirmed") : null,
       t.status === "done" ? green("done") : null,
@@ -511,12 +539,13 @@ function cmdHelp() {
     ["  -s, --subject", "subject code (cpar, pr2, …)"],
     ["  -t, --type", "type (quiz, ut, asgn, peta, …)"],
     ["  -d, --due", "today · tomorrow · fri · next mon · +3 · jul 15"],
-    ["  --time HH:MM", "due time"],
+    ["  --time HH:MM", "due time (skip it for a held-in-class task)"],
     ["  -p, --points", "points"],
     ["  -n, --note", "clarification note"],
     ["  --details", "coverage / format details"],
     ["  --link URL", "attach a material link"],
     ["  --tentative", "post as unconfirmed"],
+    ["  --in-class", "sat during class — time comes from the schedule"],
     ["", ""],
     ["list [--all] [--json]", "open tasks (--all includes done & cancelled)"],
     ["move <id> <date>", "reschedule — records old → new honestly"],

@@ -1,8 +1,8 @@
 import {
-  BookOpen,
   CalendarDays,
   CalendarRange,
   Clock3,
+  Library,
   ListTodo,
   type LucideIcon,
 } from "lucide-react";
@@ -20,7 +20,7 @@ export const NAV: NavEntry[] = [
   { href: "/week", label: "Week", icon: CalendarDays, shortcut: "2" },
   { href: "/calendar", label: "Calendar", icon: CalendarRange, shortcut: "3" },
   { href: "/tasks", label: "Tasks", icon: ListTodo, shortcut: "4" },
-  { href: "/classes", label: "Classes", icon: BookOpen, shortcut: "5" },
+  { href: "/classes", label: "Classes", icon: Library, shortcut: "5" },
 ];
 
 export function isNavActive(href: string, pathname: string): boolean {

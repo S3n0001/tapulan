@@ -10,16 +10,16 @@
 
   /* neutral architecture — shell (app chrome) sits behind bg (content panel);
      pop is the overlay surface (menus/palette/toast/dialogs), a notch above. */
-  --shell: oklch(0.962 0.002 265);
-  --bg: oklch(0.995 0 0);
-  --surface: oklch(0.972 0.002 265);
-  --surface-2: oklch(0.945 0.003 265);
-  --pop: oklch(0.998 0 0);
-  --ink: oklch(0.215 0.012 265);
-  --muted: oklch(0.455 0.012 265);
-  --faint: oklch(0.55 0.01 265); /* ≥4.5:1 on --bg — micro-meta stays AA */
-  --line: oklch(0.918 0.003 265);
-  --line-strong: oklch(0.865 0.004 265);
+  --shell: oklch(0.955 0.004 90);
+  --bg: oklch(0.992 0.002 95);
+  --surface: oklch(0.966 0.004 90);
+  --surface-2: oklch(0.938 0.005 90);
+  --pop: oklch(0.997 0.001 95);
+  --ink: oklch(0.32 0.012 80);
+  --muted: oklch(0.455 0.012 80);
+  --faint: oklch(0.55 0.01 80); /* ≥4.5:1 on --bg — micro-meta stays AA */
+  --line: oklch(0.912 0.005 90);
+  --line-strong: oklch(0.858 0.006 90);
 
   /* cobalt — the one interactive signal (fills carry white text) */
   --brand: oklch(0.5 0.16 252);
@@ -75,8 +75,8 @@
   --dur-3: 240ms;
 
   /* overlay depth */
-  --shadow-pop: 0 1px 2px oklch(0.2 0.02 265 / 0.05), 0 8px 24px oklch(0.2 0.02 265 / 0.12);
-  --shadow-overlay: 0 2px 6px oklch(0.15 0.02 265 / 0.08), 0 16px 48px oklch(0.15 0.02 265 / 0.22);
+  --shadow-pop: 0 1px 2px oklch(0.2 0.02 80 / 0.05), 0 8px 24px oklch(0.2 0.02 80 / 0.12);
+  --shadow-overlay: 0 2px 6px oklch(0.15 0.02 80 / 0.08), 0 16px 48px oklch(0.15 0.02 80 / 0.22);
 }
 
 .dark {
@@ -84,15 +84,15 @@
 
   /* neutral architecture — near-black, near-neutral. shell = void behind the
      elevated bg panel; pop = overlay surface (menus/palette/toast/dialogs). */
-  --shell: oklch(0.145 0.003 265);      /* app void, ~#0B0C0D */
-  --bg: oklch(0.178 0.003 265);         /* content panel, elevated, ~#0E0F11 */
-  --surface: oklch(0.205 0.0035 265);   /* cards / inputs on bg */
-  --surface-2: oklch(0.245 0.004 265);  /* active nav / hover-2 */
-  --pop: oklch(0.222 0.004 265);        /* overlays: one step above surface */
+  --shell: oklch(0.145 0.001 265);      /* app void, ~#0B0B0B */
+  --bg: oklch(0.178 0.001 265);         /* content panel, elevated, ~#101010 */
+  --surface: oklch(0.205 0.001 265);    /* cards / inputs on bg */
+  --surface-2: oklch(0.245 0.001 265);  /* active nav / hover-2 */
+  --pop: oklch(0.222 0.001 265);        /* overlays: one step above surface */
 
-  --ink: oklch(0.945 0.003 265);        /* primary ~#EEEFF1 */
-  --muted: oklch(0.715 0.006 265);      /* secondary ~#8A8F98 */
-  --faint: oklch(0.605 0.007 265);      /* tertiary ~#6A6F78 */
+  --ink: oklch(0.945 0.001 265);        /* primary ~#EDEDED */
+  --muted: oklch(0.715 0.001 265);      /* secondary ~#8E8E8E */
+  --faint: oklch(0.605 0.001 265);      /* tertiary ~#6F6F6F */
 
   /* hairlines — translucent white, Linear ~7% / ~11% */
   --line: oklch(1 0 0 / 0.07);
@@ -200,7 +200,7 @@
   }
 
   ::selection {
-    background: color-mix(in oklab, var(--brand) 28%, transparent);
+    background: color-mix(in oklab, var(--brand) 18%, transparent);
   }
 
   :focus-visible {
@@ -313,6 +313,23 @@
       transform var(--dur-0) var(--ease-standard);
   }
   .tap:active {
+    transform: scale(0.98);
+  }
+
+  /* Sidebar rail rows morph between a labeled row (open) and a centered icon
+     circle (collapsed). Height + radius glide with the aside width (dur-2) so
+     the pill rounds into a circle as the panel closes; color + press stay
+     snappy. Icons already sit on the 28px-center column, so nothing drifts. */
+  .rail-morph {
+    transition:
+      background-color var(--dur-1) var(--ease-standard),
+      border-color var(--dur-1) var(--ease-standard),
+      color var(--dur-1) var(--ease-standard),
+      height var(--dur-2) var(--ease-standard),
+      border-radius var(--dur-2) var(--ease-standard),
+      transform var(--dur-0) var(--ease-standard);
+  }
+  .rail-morph:active {
     transform: scale(0.98);
   }
 }
@@ -459,6 +476,18 @@
   animation: view-in var(--dur-2) var(--ease-out);
 }
 
+/* ---- month paging — the canvas drifts the way you navigate (prev/next set
+   --month-dir), so forward feels forward. Reduced-motion collapses it. ---- */
+@keyframes month-in {
+  from {
+    opacity: 0;
+    transform: translateX(var(--month-dir, 10px));
+  }
+}
+.anim-month {
+  animation: month-in var(--dur-2) var(--ease-out);
+}
+
 /* ---- skeleton loading ----
    A quiet opacity pulse on a hairline tint — no gradient sweep. Skeletons
    mirror each view's real geometry so the content swap is a no-shift replace. */
@@ -511,6 +540,7 @@
   }
   .press:active,
   .tap:active,
+  .rail-morph:active,
   [class*="active:scale"] {
     transform: none !important;
   }
@@ -523,6 +553,7 @@
     animation: none !important;
   }
   .anim-view,
+  .anim-month,
   .done-tick,
   .done-pop {
     animation: none !important;

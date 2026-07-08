@@ -8,6 +8,9 @@ import { useEffect, useState } from "react";
  * time on mount and ticks. Pauses updates while the tab is hidden.
  */
 export function useNow(initialISO: string, intervalMs = 30_000): Date {
+  // `initialISO` is a placeholder seed (the server's render-time instant) —
+  // it only has to match what SSR printed for the *first* client paint, and
+  // is immediately corrected to the device's real clock in the effect below.
   const [now, setNow] = useState(() => new Date(initialISO));
 
   useEffect(() => {

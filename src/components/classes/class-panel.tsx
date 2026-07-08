@@ -9,7 +9,7 @@ import { accentStyle } from "@/lib/domain/hues";
 import { useNow } from "@/hooks/use-now";
 import { Panel } from "@/components/ui/panel";
 import { Button } from "@/components/ui/button";
-import { HueBadge, WarnFlag } from "@/components/ui/badge";
+import { HueBadge, InfoFlag, WarnFlag } from "@/components/ui/badge";
 
 function Property({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -64,6 +64,7 @@ export function ClassPanel({
     <Panel
       open={open}
       onClose={onClose}
+      modal={false}
       title={
         <span className="flex items-center gap-2">
           <span style={accentStyle(shown.hue)} className="a-dot size-2.5 rounded-[3.5px]" />
@@ -109,9 +110,7 @@ export function ClassPanel({
         </dl>
 
         <section>
-          <h3 className="mb-1.5 font-mono text-[10.5px] font-semibold uppercase tracking-[0.06em] text-faint">
-            Meetings
-          </h3>
+          <h3 className="mb-1.5 text-[11px] font-medium text-muted">Meetings</h3>
           {shownMeetings.length === 0 ? (
             <p className="text-[12.5px] text-faint">Not on the weekly schedule.</p>
           ) : (
@@ -139,9 +138,9 @@ export function ClassPanel({
         </section>
 
         <section>
-          <h3 className="mb-1.5 flex items-baseline gap-2 font-mono text-[10.5px] font-semibold uppercase tracking-[0.06em] text-faint">
+          <h3 className="mb-1.5 flex items-baseline gap-2 text-[11px] font-medium text-muted">
             Open requirements
-            <span className="tnum">{openTasks.length}</span>
+            <span className="tnum font-mono text-[10.5px] text-faint">{openTasks.length}</span>
           </h3>
           {openTasks.length === 0 ? (
             <p className="text-[12.5px] text-faint">Nothing due for this subject.</p>
@@ -163,8 +162,9 @@ export function ClassPanel({
                     <span className="min-w-0 flex-1 truncate text-[12.5px] font-medium text-ink">
                       {t.title}
                     </span>
+                    {t.heldInClass && <InfoFlag>In class</InfoFlag>}
                     {(t.movedFrom || t.status === "tentative") && (
-                      <WarnFlag>{t.movedFrom ? "moved" : "unconfirmed"}</WarnFlag>
+                      <WarnFlag>{t.movedFrom ? "Moved" : "Unconfirmed"}</WarnFlag>
                     )}
                     <span className="tnum shrink-0 font-mono text-[11px] text-muted">
                       {dueLabel(t.dueDate, now)}

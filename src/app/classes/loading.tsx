@@ -1,4 +1,5 @@
-import { Toolbar } from "@/components/shell/toolbar";
+import { Library } from "lucide-react";
+import { ViewChrome } from "@/components/shell/view-chrome";
 import { Skeleton } from "@/components/ui/skeleton";
 
 /** Classes, loading — grouped dense rows with the meet-dot column ghosted. */
@@ -28,11 +29,10 @@ function GhostRow({ w }: { w: string }) {
 
 export default function ClassesLoading() {
   return (
-    <div aria-busy="true">
+    <ViewChrome title="Classes" icon={Library} meta={<Skeleton className="h-3.5 w-16" />}>
       <span role="status" className="sr-only">
         Loading classes…
       </span>
-      <Toolbar title="Classes" meta={<Skeleton className="h-3 w-16" />} />
 
       {[0, 1].map((section) => (
         <section key={section}>
@@ -47,6 +47,6 @@ export default function ClassesLoading() {
           </div>
         </section>
       ))}
-    </div>
+    </ViewChrome>
   );
 }

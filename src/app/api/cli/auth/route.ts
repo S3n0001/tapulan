@@ -1,4 +1,10 @@
-import { checkAdminPassword } from "@/lib/auth";
+import {
+  checkAdminPassword,
+  checkLoginLockout,
+  clearLoginFailures,
+  clientIpFromRequest,
+  recordLoginFailure,
+} from "@/lib/auth";
 import { mintApiToken, revokeApiToken } from "@/lib/auth/tokens";
 import { jsonErr, jsonOk, requireToken } from "@/lib/api/cli";
 
@@ -9,18 +15,11 @@ import { jsonErr, jsonOk, requireToken } from "@/lib/api/cli";
  * Admin → Settings tab lists and revokes them.
  */
 
-/** Same rudimentary in-process lockout as the web login. */
-const attempts = new Map<string, { count: number; until: number }>();
-const MAX_ATTEMPTS = 6;
-const LOCK_MS = 60_000;
-
 export async function POST(req: Request) {
-  const now = Date.now();
-  const gate = attempts.get("cli");
-  if (gate && gate.until > now && gate.count >= MAX_ATTEMPTS) {
-    const secs = Math.ceil((gate.until - now) / 1000);
-    return jsonErr(`Too many attempts. Try again in ${secs}s.`, 429);
-  }
+  const ip = clientIpFromRequest(req);
+
+  const lockedMsg = checkLoginLockout(ip);
+  if (lockedMsg) return jsonErr(lockedMsg, 429);
 
   const body = (await req.json().catch(() => null)) as {
     password?: unknown;
@@ -30,14 +29,11 @@ export async function POST(req: Request) {
   const label = typeof body?.label === "string" ? body.label.slice(0, 60) : "";
 
   if (!password || !checkAdminPassword(password)) {
-    const next = gate && gate.until > now ? gate : { count: 0, until: now + LOCK_MS };
-    next.count += 1;
-    next.until = now + LOCK_MS;
-    attempts.set("cli", next);
+    await recordLoginFailure(ip);
     return jsonErr("Wrong password.", 401);
   }
 
-  attempts.delete("cli");
+  clearLoginFailures(ip);
   const { token, meta } = mintApiToken(label || "CLI");
   return jsonOk({ token, label: meta.label, createdAt: meta.createdAt });
 }

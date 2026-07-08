@@ -2,20 +2,17 @@ import "server-only";
 import DatabaseConstructor, { type Database } from "better-sqlite3";
 import fs from "node:fs";
 import path from "node:path";
-import { randomBytes, scryptSync } from "node:crypto";
+import { randomBytes } from "node:crypto";
 import { SCHEMA } from "./schema";
 import { seedDatabase } from "./seed";
+import { hashPassword } from "@/lib/auth/password";
 
 /**
  * SQLite lives at data/tapulan.db (created + seeded on first touch).
  * The handle is cached on globalThis so dev-server hot reloads reuse it.
  */
 
-function hashPassword(password: string): string {
-  const salt = randomBytes(16).toString("hex");
-  const hash = scryptSync(password, salt, 64).toString("hex");
-  return `${salt}:${hash}`;
-}
+const SCHEMA_VERSION = "1";
 
 /**
  * Idempotent column adds for databases created before a feature landed.
@@ -40,6 +37,9 @@ function migrate(db: Database): void {
   if (!cols.some((c) => c.name === "done_in_class")) {
     db.exec("ALTER TABLE tasks ADD COLUMN done_in_class INTEGER NOT NULL DEFAULT 0");
   }
+  if (!cols.some((c) => c.name === "held_in_class")) {
+    db.exec("ALTER TABLE tasks ADD COLUMN held_in_class INTEGER NOT NULL DEFAULT 0");
+  }
 }
 
 function open(): Database {
@@ -63,13 +63,27 @@ function open(): Database {
   const getRow = db.prepare("SELECT value FROM meta WHERE key = ?");
   const putIfAbsent = db.prepare("INSERT OR IGNORE INTO meta (key, value) VALUES (?, ?)");
   if (!getRow.get("admin_password")) {
-    putIfAbsent.run("admin_password", hashPassword(process.env.ADMIN_PASSWORD || "tapulan"));
+    const envPassword = process.env.ADMIN_PASSWORD;
+    if (envPassword) {
+      putIfAbsent.run("admin_password", hashPassword(envPassword));
+    } else if (process.env.NODE_ENV === "production") {
+      throw new Error(
+        "ADMIN_PASSWORD must be set on first run. Refusing to boot with an unset admin password in production."
+      );
+    } else {
+      console.warn(
+        "\n*** WARNING: ADMIN_PASSWORD is not set — falling back to the insecure dev default 'tapulan'. " +
+          "Set ADMIN_PASSWORD before deploying. ***\n"
+      );
+      putIfAbsent.run("admin_password", hashPassword("tapulan"));
+    }
   }
   if (!getRow.get("session_secret")) {
     putIfAbsent.run("session_secret", randomBytes(32).toString("hex"));
   }
   putIfAbsent.run("section_name", "Grade 12 · St. Lorenzo Ruiz");
   putIfAbsent.run("school_year", "SY 2026–2027");
+  putIfAbsent.run("schema_version", SCHEMA_VERSION);
 
   return db;
 }

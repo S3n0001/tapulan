@@ -112,10 +112,10 @@ export function Sidebar({
         title={collapsed ? "Search (⌘K)" : undefined}
         aria-label="Search"
         className={cn(
-          "tap mt-2 flex h-8 shrink-0 items-center gap-2 overflow-hidden whitespace-nowrap rounded-[var(--r-control)] border px-[9px] text-[12.5px] text-faint transition-[color,background-color,border-color,transform] duration-[var(--dur-2)]",
+          "rail-morph mt-2 flex shrink-0 items-center gap-2 overflow-hidden whitespace-nowrap border px-[9px] text-[12.5px] text-faint",
           collapsed
-            ? "border-transparent hover:bg-surface-2 hover:text-muted"
-            : "border-line bg-surface hover:border-line-strong hover:text-muted"
+            ? "h-9 rounded-full border-transparent hover:bg-surface-2 hover:text-muted"
+            : "h-8 rounded-[var(--r-control)] border-line bg-surface hover:border-line-strong hover:text-muted"
         )}
       >
         <Search className="size-4 shrink-0" />
@@ -150,7 +150,8 @@ export function Sidebar({
               aria-current={active ? "page" : undefined}
               title={collapsed ? item.label : undefined}
               className={cn(
-                "tap relative flex h-[30px] items-center gap-2.5 overflow-hidden whitespace-nowrap rounded-[6px] px-2.5 text-[13px] font-medium transition-[color,background-color,transform] duration-[var(--dur-1)]",
+                "rail-morph relative flex items-center gap-2.5 overflow-hidden whitespace-nowrap px-2.5 text-[13px] font-medium",
+                collapsed ? "h-9 rounded-full" : "h-[30px] rounded-[6px]",
                 active ? "bg-surface-2 text-ink" : "text-muted hover:bg-surface hover:text-ink"
               )}
             >
@@ -195,7 +196,8 @@ export function Sidebar({
             aria-current={pathname.startsWith("/admin") ? "page" : undefined}
             title={collapsed ? "Admin" : undefined}
             className={cn(
-              "tap relative flex h-8 items-center gap-2.5 overflow-hidden whitespace-nowrap rounded-[6px] px-2.5 text-[13px] font-medium transition-[color,background-color,transform] duration-[var(--dur-1)]",
+              "rail-morph relative flex items-center gap-2.5 overflow-hidden whitespace-nowrap px-2.5 text-[13px] font-medium",
+              collapsed ? "h-9 rounded-full" : "h-8 rounded-[6px]",
               pathname.startsWith("/admin")
                 ? "bg-surface-2 text-ink"
                 : "text-muted hover:bg-surface hover:text-ink"
@@ -227,7 +229,7 @@ export function Sidebar({
             />
           </Link>
         )}
-        <ThemeToggle className="!size-9 rounded-full" />
+        <ThemeToggle collapsed={collapsed} />
       </div>
     </aside>
   );

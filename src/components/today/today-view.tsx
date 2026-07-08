@@ -9,6 +9,7 @@ import {
   CalendarOff,
   CalendarRange,
   CheckCircle2,
+  Clock3,
   Inbox,
   Laptop,
 } from "lucide-react";
@@ -21,7 +22,7 @@ import {
   DAY_MARK_SHORT,
   dayMarkTitle,
 } from "@/lib/domain/day-mark";
-import { isActionable } from "@/lib/domain/tasks";
+import { dueMinOf, isActionable } from "@/lib/domain/tasks";
 import {
   DAY_NAMES,
   daysUntil,
@@ -31,6 +32,7 @@ import {
   fmtDuration,
   fmtMin,
   fmtMinAmPm,
+  fromISODate,
   isPastDue,
   minutesOf,
   toISODate,
@@ -40,8 +42,8 @@ import { accentStyle } from "@/lib/domain/hues";
 import { useNow } from "@/hooks/use-now";
 import { useDone } from "@/hooks/use-done";
 import { cn } from "@/lib/utils";
-import { Toolbar } from "@/components/shell/toolbar";
-import { HueBadge, WarnFlag } from "@/components/ui/badge";
+import { ViewChrome } from "@/components/shell/view-chrome";
+import { HueBadge, InfoFlag, WarnFlag } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty";
 import { DoneCheck } from "@/components/tasks/done-check";
 import { DueFlag } from "@/components/tasks/due-flag";
@@ -86,7 +88,21 @@ export function TodayView({
   // an async / no-class day has nothing "live" — neutralize the timeline state
   const liveActive = isToday && mark === null;
   const live = liveForDay(dayPeriods, nowMin, liveActive);
-  const shownDate = new Date(dateISO);
+  const shownDate = fromISODate(dateISO);
+
+  // announce the now-strip to screen readers only when the *period* changes,
+  // not on every 30s countdown tick — gated on the current/next period id
+  // rather than on `now` itself
+  const currents = dayPeriods.filter((p) => live.states.get(p.id) === "current");
+  const nowStripAnnounceKey = currents[0]?.id ?? live.nextClassId ?? "none";
+  const nowStripAnnounceText = currents.length > 0
+    ? currents.length > 1
+      ? "Strand split block"
+      : (currents[0].subject?.name ?? currents[0].label ?? "Current period")
+    : (() => {
+        const next = dayPeriods.find((p) => p.id === live.nextClassId) ?? null;
+        return next ? `Up next: ${next.subject?.name ?? next.label ?? ""}` : "No more periods today";
+      })();
 
   // requirements due on the shown day, grouped by subject — so each class row
   // can flag the peta/quiz that belongs to it, right on the timeline
@@ -104,21 +120,23 @@ export function TodayView({
   }, [tasks, shownISO]);
 
   return (
-    <div className="anim-view">
-      <Toolbar
-        title="Today"
-        meta={
-          <>
-            <span>{DATE_FMT.format(shownDate)}</span>
-            {isToday && (
-              <>
-                <span className="text-line-strong">·</span>
-                <span>{CLOCK_FMT.format(now)}</span>
-              </>
-            )}
-          </>
-        }
-      />
+    <ViewChrome
+      title="Today"
+      icon={Clock3}
+      meta={
+        <>
+          <span className="tnum">{DATE_FMT.format(shownDate)}</span>
+          {isToday && (
+            <>
+              <span className="text-line-strong">·</span>
+              <time className="tnum" dateTime={now.toISOString()}>
+                {CLOCK_FMT.format(now)}
+              </time>
+            </>
+          )}
+        </>
+      }
+    >
 
       <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_336px]">
         <section className="min-w-0 lg:border-r lg:border-line">
@@ -129,7 +147,15 @@ export function TodayView({
             </p>
           )}
 
-          <div className="p-3.5 lg:p-4">
+          <div className="p-3.5 lg:p-4" role="status" aria-live="polite">
+            {/* visually-hidden announcement, keyed on period identity so it
+                only changes (and is only announced) on a period transition —
+                not on every countdown tick from the visible card below */}
+            {isToday && !mark && (
+              <span key={nowStripAnnounceKey} className="sr-only">
+                {nowStripAnnounceText}
+              </span>
+            )}
             {mark ? (
               <DayMarkHero mark={mark} day={day} isToday={isToday} />
             ) : (
@@ -155,7 +181,7 @@ export function TodayView({
           <DueRail tasks={tasks} now={now} />
         </aside>
       </div>
-    </div>
+    </ViewChrome>
   );
 }
 
@@ -569,8 +595,8 @@ function DueRail({ tasks, now }: { tasks: TaskFull[]; now: Date }) {
 
   // personal "done" is device-local; drop it alongside section done/cancelled
   const active = tasks.filter((t) => isActionable(t) && !isDone(t.id));
-  const od = active.filter((t) => isPastDue(t.dueDate, t.dueTime, now));
-  const upcoming = active.filter((t) => !isPastDue(t.dueDate, t.dueTime, now));
+  const od = active.filter((t) => isPastDue(t.dueDate, dueMinOf(t), now));
+  const upcoming = active.filter((t) => !isPastDue(t.dueDate, dueMinOf(t), now));
   const within = upcoming.filter((t) => daysUntil(t.dueDate, now) <= horizon);
   const later = upcoming.filter((t) => daysUntil(t.dueDate, now) > horizon);
   const nearest = upcoming[0] ?? null; // list is due-sorted → first is soonest
@@ -722,7 +748,7 @@ function DueRow({
   onToggle: () => void;
   onOpen: () => void;
 }) {
-  const tone = dueTone(task.dueDate, now, task.dueTime);
+  const tone = dueTone(task.dueDate, now, dueMinOf(task));
   return (
     <li className="flex items-center gap-2.5 px-3.5 py-2 transition-colors hover:bg-surface/70 lg:px-4">
       <DoneCheck done={done} onToggle={onToggle} className="size-4 rounded-[4px]" />
@@ -739,8 +765,9 @@ function DueRow({
             <span className="truncate text-[12.5px] font-medium leading-snug text-ink">
               {task.title}
             </span>
+            {task.heldInClass && <InfoFlag>In class</InfoFlag>}
             {(task.movedFrom || task.status === "tentative") && (
-              <WarnFlag>{task.movedFrom ? "moved" : "unconfirmed"}</WarnFlag>
+              <WarnFlag>{task.movedFrom ? "Moved" : "Unconfirmed"}</WarnFlag>
             )}
           </span>
           <span

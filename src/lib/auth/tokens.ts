@@ -86,3 +86,8 @@ export function listApiTokens(): ApiToken[] {
 export function revokeApiToken(id: number): boolean {
   return getDb().prepare("DELETE FROM api_tokens WHERE id = ?").run(id).changes > 0;
 }
+
+/** Revoke every CLI token — used when the shared admin password changes. */
+export function revokeAllApiTokens(): void {
+  getDb().prepare("DELETE FROM api_tokens").run();
+}

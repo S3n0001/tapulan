@@ -1,10 +1,16 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
-import { CalendarPlus, ChevronLeft, ChevronRight } from "lucide-react";
-import type { DayMark, StrandCode, TaskFull } from "@/lib/domain/types";
-import { isActionable } from "@/lib/domain/tasks";
+import { CalendarPlus, CalendarRange, ChevronLeft, ChevronRight } from "lucide-react";
+import type {
+  DayMark,
+  PeriodFull,
+  StrandCode,
+  SubjectFull,
+  TaskFull,
+  TaskType,
+} from "@/lib/domain/types";
+import { classTimeOf, dueMinOf, isActionable } from "@/lib/domain/tasks";
 import {
   addDays,
   addMonths,
@@ -27,10 +33,12 @@ import { useNow } from "@/hooks/use-now";
 import { useDone } from "@/hooks/use-done";
 import { usePresence } from "@/hooks/use-presence";
 import { cn } from "@/lib/utils";
-import { Toolbar } from "@/components/shell/toolbar";
+import { ViewChrome } from "@/components/shell/view-chrome";
+import { useIsAdmin } from "@/components/shell/admin-context";
 import { HueBadge } from "@/components/ui/badge";
 import { TaskListRow } from "@/components/tasks/task-list-row";
 import { TaskPanel } from "@/components/tasks/task-panel";
+import { TaskEditor } from "@/components/tasks/task-editor";
 
 /**
  * The month canvas — a real calendar, not an agenda. Desktop is a full-bleed
@@ -38,7 +46,8 @@ import { TaskPanel } from "@/components/tasks/task-panel";
  * colored by task type, day-mark bands (async wash / hatched no-class, same
  * vocabulary as the week canvas), cobalt today, danger for overdue-but-open.
  * Overflow days open a per-day popover. Mobile is a compact dot grid over a
- * selected-day agenda. Read-only: chips open the shared task panel.
+ * selected-day agenda. Chips open the shared task panel; admins edit the
+ * requirement in place, without a detour to the task list.
  */
 
 const WEEKDAYS = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"] as const;
@@ -89,19 +98,26 @@ function relDay(iso: string, now: Date): string {
 export function CalendarView({
   tasks,
   marks,
+  subjects,
+  types,
+  periods,
   strand,
   initialMonth,
   nowISO,
 }: {
   tasks: TaskFull[];
   marks: DayMark[];
+  /** editor data — the calendar edits requirements in place, like the task list */
+  subjects: SubjectFull[];
+  types: TaskType[];
+  periods: PeriodFull[];
   strand: StrandCode | null;
   /** validated "YYYY-MM" from ?m=, or null for the current month */
   initialMonth: string | null;
   nowISO: string;
 }) {
   const now = useNow(nowISO, 60_000);
-  const router = useRouter();
+  const isAdmin = useIsAdmin();
   const { isDone, toggle } = useDone();
   const todayISO = toISODate(now);
   const nowKey = todayISO.slice(0, 7);
@@ -112,6 +128,7 @@ export function CalendarView({
   const key = monthKeyOf(month);
 
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [editing, setEditing] = useState<TaskFull | null>(null);
 
   // the day the mobile agenda shows — today when visible, else the 1st
   const [dayISO, setDayISO] = useState<string>(() =>
@@ -176,13 +193,29 @@ export function CalendarView({
 
   const dayByIso = useMemo(() => new Map(days.map((d) => [d.iso, d])), [days]);
 
+  // the weekday column today sits in (Mon=0…Sun=6) — only when this month is
+  // on screen, so its header reads cobalt and today's column is findable
+  const todayCol = useMemo(() => days.find((d) => d.isToday)?.col ?? -1, [days]);
+
+  // month paging direction, so the canvas slides the way you navigate
+  const dir = useRef(1);
+  const page = (n: number) => {
+    dir.current = n < 0 ? -1 : 1;
+    setMonth((m) => addMonths(m, n));
+  };
+  const goToMonth = (target: Date) => {
+    dir.current = monthKeyOf(target) < key ? -1 : 1;
+    setMonth(target);
+  };
+  const slide = { "--month-dir": dir.current < 0 ? "-10px" : "10px" } as React.CSSProperties;
+
   // toolbar meta — open work in the labeled month, split honest/overdue
   const { dueCount, lateCount } = useMemo(() => {
     let due = 0;
     let late = 0;
     for (const t of tasks) {
       if (!t.dueDate.startsWith(key) || !isActionable(t) || isDone(t.id)) continue;
-      if (isPastDue(t.dueDate, t.dueTime, now)) late++;
+      if (isPastDue(t.dueDate, dueMinOf(t), now)) late++;
       else due++;
     }
     return { dueCount: due, lateCount: late };
@@ -232,7 +265,7 @@ export function CalendarView({
     const dx = e.changedTouches[0].clientX - start.x;
     const dy = e.changedTouches[0].clientY - start.y;
     if (Math.abs(dx) < 56 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
-    setMonth((m) => addMonths(m, dx < 0 ? 1 : -1));
+    page(dx < 0 ? 1 : -1);
   };
 
   const controls = (
@@ -250,7 +283,7 @@ export function CalendarView({
         {key !== nowKey && (
           <button
             type="button"
-            onClick={() => setMonth(startOfMonth(now))}
+            onClick={() => goToMonth(startOfMonth(now))}
             className="tap mr-1 rounded-[var(--r-chip)] px-2 py-1 font-mono text-[11px] font-medium text-faint transition-colors hover:text-ink"
           >
             This month
@@ -259,7 +292,7 @@ export function CalendarView({
         <button
           type="button"
           aria-label="Previous month"
-          onClick={() => setMonth((m) => addMonths(m, -1))}
+          onClick={() => page(-1)}
           className="tap grid size-7 place-items-center rounded-[var(--r-control)] text-muted transition-[color,background-color] hover:bg-surface-2 hover:text-ink"
         >
           <ChevronLeft className="size-4" />
@@ -267,7 +300,7 @@ export function CalendarView({
         <button
           type="button"
           aria-label="Next month"
-          onClick={() => setMonth((m) => addMonths(m, 1))}
+          onClick={() => page(1)}
           className="tap grid size-7 place-items-center rounded-[var(--r-control)] text-muted transition-[color,background-color] hover:bg-surface-2 hover:text-ink"
         >
           <ChevronRight className="size-4" />
@@ -281,30 +314,33 @@ export function CalendarView({
   const agendaOpen = agendaTasks.filter((t) => !isHandled(t, isDone(t.id))).length;
 
   return (
-    <div className="anim-view flex flex-col lg:h-full lg:min-h-0">
-      <Toolbar
-        title="Calendar"
-        meta={
-          <>
-            <span className="font-medium text-ink">{fmtMonthYear(month)}</span>
-            <span>{dueCount} due</span>
-            {lateCount > 0 && <span className="text-danger-text">{lateCount} overdue</span>}
-          </>
-        }
-        right={controls}
-        className="shrink-0"
-      />
+    <ViewChrome
+      title="Calendar"
+      icon={CalendarRange}
+      meta={
+        <>
+          <span className="tnum font-medium text-ink">{fmtMonthYear(month)}</span>
+          <span className="tnum">{dueCount} due</span>
+          {lateCount > 0 && <span className="tnum text-danger-text">{lateCount} overdue</span>}
+        </>
+      }
+      right={controls}
+    >
 
       {/* ------------------------------------------------ desktop month grid */}
-      <div className="hidden lg:flex lg:min-h-0 lg:flex-1 lg:flex-col">
+      <div className="hidden lg:flex lg:min-h-0 lg:flex-1 lg:flex-col lg:overflow-hidden">
         <div className="grid shrink-0 grid-cols-7 border-b border-line">
           {WEEKDAYS.map((w, i) => (
             <div
               key={w}
               className={cn(
-                "flex h-8 items-center justify-end px-2 font-mono text-[10px] font-semibold uppercase tracking-[0.08em]",
+                "flex h-8 items-center px-2 font-mono text-[10px] font-semibold uppercase tracking-[0.08em]",
                 i > 0 && "border-l border-line/60",
-                i >= 5 ? "text-faint/60" : "text-faint"
+                i === todayCol
+                  ? "text-brand-text"
+                  : i >= 5
+                    ? "text-muted"
+                    : "text-faint"
               )}
             >
               {w}
@@ -315,8 +351,8 @@ export function CalendarView({
         <div
           ref={gridRef}
           key={key}
-          className="anim-fade grid min-h-[500px] flex-1 grid-cols-7"
-          style={{ gridTemplateRows: `repeat(${weeks}, minmax(0, 1fr))` }}
+          className="anim-month grid min-h-[500px] flex-1 grid-cols-7"
+          style={{ gridTemplateRows: `repeat(${weeks}, minmax(0, 1fr))`, ...slide }}
         >
           {days.map((d, i) => (
             <DayCell
@@ -336,7 +372,7 @@ export function CalendarView({
       {/* ------------------------------------------------ mobile month + day */}
       <div className="lg:hidden">
         <div
-          className="border-b border-line px-2 pb-1.5 pt-2"
+          className="overflow-hidden border-b border-line px-2 pb-1.5 pt-2"
           onTouchStart={onTouchStart}
           onTouchEnd={onTouchEnd}
         >
@@ -347,14 +383,14 @@ export function CalendarView({
                 aria-hidden
                 className={cn(
                   "pb-1 text-center font-mono text-[9px] font-semibold uppercase",
-                  i >= 5 ? "text-faint/60" : "text-faint"
+                  i >= 5 ? "text-muted" : "text-faint"
                 )}
               >
                 {l}
               </span>
             ))}
           </div>
-          <div key={key} className="anim-fade grid grid-cols-7">
+          <div key={key} className="anim-month grid grid-cols-7" style={slide}>
             {days.map((d) => (
               <MiniDay
                 key={d.iso}
@@ -447,11 +483,24 @@ export function CalendarView({
         onToggleDone={() => selected && toggle(selected.id)}
         onEdit={(t) => {
           setSelectedId(null);
-          router.push(`/tasks?task=${t.id}`);
+          setEditing(t);
         }}
         nowISO={nowISO}
+        subjects={subjects}
+        types={types}
       />
-    </div>
+
+      {isAdmin && editing !== null && (
+        <TaskEditor
+          task={editing}
+          subjects={subjects}
+          types={types}
+          periods={periods}
+          open
+          onClose={() => setEditing(null)}
+        />
+      )}
+    </ViewChrome>
   );
 }
 
@@ -482,7 +531,7 @@ function DayCell({
     hidden > 0 &&
     ordered
       .slice(visible)
-      .some((t) => !isHandled(t, isDone(t.id)) && isPastDue(t.dueDate, t.dueTime, now));
+      .some((t) => !isHandled(t, isDone(t.id)) && isPastDue(t.dueDate, dueMinOf(t), now));
 
   return (
     <div
@@ -491,7 +540,7 @@ function DayCell({
         topRow ? "border-t-0" : "border-t border-line/60",
         d.col > 0 && "border-l border-line/60",
         d.weekend && "bg-shell/45",
-        d.isToday && "bg-[color-mix(in_oklab,var(--brand)_6%,transparent)]"
+        d.isToday && "bg-[color-mix(in_oklab,var(--brand)_8%,transparent)]"
       )}
     >
       {/* day-mark texture — same vocabulary as the week canvas */}
@@ -506,7 +555,7 @@ function DayCell({
         />
       )}
 
-      <div className="relative flex h-6 shrink-0 items-center justify-end px-1.5 pt-1">
+      <div className="relative flex h-6 shrink-0 items-center px-2 pt-1">
         {d.isToday ? (
           <span className="tnum grid size-5 place-items-center rounded-full bg-brand font-mono text-[10.5px] font-semibold leading-none text-on-brand">
             {d.dateNum}
@@ -515,7 +564,7 @@ function DayCell({
           <span
             className={cn(
               "tnum font-mono text-[11px] font-medium leading-none",
-              !d.inMonth ? "text-faint/60" : d.past ? "text-faint" : "text-muted"
+              !d.inMonth ? "text-muted" : d.past ? "text-faint" : "text-muted"
             )}
           >
             {d.dateNum === 1 ? fmtDateShort(d.iso) : d.dateNum}
@@ -585,10 +634,13 @@ function TaskChip({
   dim: boolean;
   onOpen: () => void;
 }) {
-  const late = !handled && isPastDue(t.dueDate, t.dueTime, now);
+  const late = !handled && isPastDue(t.dueDate, dueMinOf(t), now);
+  // held-in-class shows when the class meets (its start), not an end-of-day time
+  const timeMin = t.heldInClass ? classTimeOf(t) : t.dueTime;
   const tip =
     `${t.type.short} · ${t.subject.short}${t.secondarySubject ? `+${t.secondarySubject.short}` : ""} — ${t.title}` +
-    (t.dueTime !== null ? ` · ${fmtMinAmPm(t.dueTime)}` : "") +
+    (timeMin !== null ? ` · ${fmtMinAmPm(timeMin)}` : "") +
+    (t.heldInClass ? " · in class" : "") +
     (t.status === "cancelled"
       ? " · cancelled"
       : late
@@ -605,9 +657,15 @@ function TaskChip({
       aria-label={tip}
       style={accentStyle(t.type.hue)}
       className={cn(
-        "tap flex h-[18px] w-full min-w-0 shrink-0 items-center gap-1.5 rounded-[4px] px-1 text-left transition-colors hover:bg-surface-2",
-        handled && "opacity-60",
-        dim && "opacity-70"
+        "tap flex h-[18px] w-full min-w-0 shrink-0 items-center gap-1.5 rounded-[4px] pl-1 pr-1.5 text-left transition-colors",
+        // open deadlines read as tinted blocks (type hue = data); overdue glows
+        // danger; settled work drops its fill and recedes
+        handled
+          ? "opacity-70 hover:bg-surface-2"
+          : late
+            ? "bg-[color-mix(in_oklab,var(--danger)_var(--tint),transparent)] hover:bg-[color-mix(in_oklab,var(--danger)_var(--tint-2),transparent)]"
+            : "bg-[color-mix(in_oklab,var(--a)_var(--tint),transparent)] hover:bg-[color-mix(in_oklab,var(--a)_var(--tint-2),transparent)]",
+        dim && "opacity-75"
       )}
     >
       <span
@@ -632,14 +690,14 @@ function TaskChip({
       {!handled && t.status === "tentative" && (
         <span aria-hidden className="size-1 shrink-0 rounded-full bg-warn" />
       )}
-      {t.dueTime !== null && !handled && (
+      {timeMin !== null && !handled && (
         <span
           className={cn(
             "tnum shrink-0 font-mono text-[9px] leading-none",
             late ? "text-danger-text" : "text-faint"
           )}
         >
-          {fmtMin(t.dueTime)}
+          {fmtMin(timeMin)}
         </span>
       )}
     </button>
@@ -666,7 +724,7 @@ function MiniDay({
     return (
       <span
         aria-hidden
-        className="tnum flex h-12 items-start justify-center pt-[7px] font-mono text-[12px] font-medium text-faint/40"
+        className="tnum flex h-12 items-start justify-center pt-[7px] font-mono text-[12px] font-medium text-muted"
       >
         {d.dateNum}
       </span>
@@ -714,7 +772,7 @@ function MiniDay({
         )}
         {dots.map((t) => {
           const handled = isHandled(t, isDone(t.id));
-          const late = !handled && isPastDue(t.dueDate, t.dueTime, now);
+          const late = !handled && isPastDue(t.dueDate, dueMinOf(t), now);
           return (
             <span
               key={t.id}
@@ -764,24 +822,31 @@ function DayPopover({
 }) {
   const { mounted, state } = usePresence(open);
   const ref = useRef<HTMLDivElement>(null);
+  const restoreRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     if (!open) return;
+    restoreRef.current = document.activeElement as HTMLElement | null;
     ref.current?.focus({ preventScroll: true });
+    // capture phase so Escape is swallowed before an open task peek's
+    // document-level listener sees it — one press closes only the popover
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key !== "Escape") return;
+      e.stopPropagation();
+      onClose();
     };
     const onDown = (e: PointerEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) onClose();
     };
     const onResize = () => onClose();
-    document.addEventListener("keydown", onKey);
+    document.addEventListener("keydown", onKey, true);
     document.addEventListener("pointerdown", onDown);
     window.addEventListener("resize", onResize);
     return () => {
-      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("keydown", onKey, true);
       document.removeEventListener("pointerdown", onDown);
       window.removeEventListener("resize", onResize);
+      restoreRef.current?.focus?.({ preventScroll: true });
     };
   }, [open, onClose]);
 
@@ -793,6 +858,7 @@ function DayPopover({
     <div
       ref={ref}
       role="dialog"
+      aria-modal="true"
       aria-label={`Due ${fmtDateLong(day.iso)}`}
       tabIndex={-1}
       data-state={state}
@@ -827,7 +893,7 @@ function DayPopover({
         ) : (
           ordered.map((t) => {
             const handled = isHandled(t, isDone(t.id));
-            const late = !handled && isPastDue(t.dueDate, t.dueTime, now);
+            const late = !handled && isPastDue(t.dueDate, dueMinOf(t), now);
             return (
               <button
                 key={t.id}
@@ -868,9 +934,11 @@ function DayPopover({
                     ? "—"
                     : late
                       ? "overdue"
-                      : t.dueTime !== null
-                        ? fmtMin(t.dueTime)
-                        : ""}
+                      : t.heldInClass
+                        ? "in class"
+                        : t.dueTime !== null
+                          ? fmtMin(t.dueTime)
+                          : ""}
                 </span>
               </button>
             );

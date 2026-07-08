@@ -3,6 +3,7 @@
 import {
   useCallback,
   useEffect,
+  useId,
   useMemo,
   useRef,
   useState,
@@ -83,6 +84,7 @@ export function CommandPalette({
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const { mounted, state } = usePresence(open, 140);
+  const listId = useId();
 
   const close = useCallback(() => setOpen(false), []);
 
@@ -97,7 +99,9 @@ export function CommandPalette({
       }
       const target = e.target as HTMLElement | null;
       const typing = target?.closest('input, textarea, select, [contenteditable="true"]');
-      if (typing || e.metaKey || e.ctrlKey || e.altKey) return;
+      // non-modal peeks are role="dialog" without aria-modal — they must not eat shortcuts
+      const modalOpen = document.querySelector('[aria-modal="true"]');
+      if (typing || modalOpen || e.metaKey || e.ctrlKey || e.altKey) return;
       if (key === "/") {
         e.preventDefault();
         setOpen(true);
@@ -281,7 +285,7 @@ export function CommandPalette({
     >
       <div
         data-state={state}
-        className="anim-fade absolute inset-0 bg-[oklch(0.08_0.005_265/0.52)]"
+        className="anim-fade absolute inset-0 bg-[oklch(0.08_0.004_80/0.52)]"
         onClick={close}
         aria-hidden
       />
@@ -308,17 +312,41 @@ export function CommandPalette({
                 e.preventDefault();
                 runEntry(entries[clampedActive]);
               } else if (e.key === "Escape") {
+                // React delegates at the document root, where an open
+                // non-modal Panel also listens — shield it so one press
+                // closes only the palette
+                e.stopPropagation();
+                e.nativeEvent.stopImmediatePropagation();
                 close();
               }
             }}
             placeholder="Jump to a view, task, or class…"
             aria-label="Search commands"
+            role="combobox"
+            aria-expanded="true"
+            aria-controls={listId}
+            aria-autocomplete="list"
+            aria-activedescendant={
+              entries.length > 0 ? `${listId}-opt-${clampedActive}` : undefined
+            }
             className="h-full flex-1 bg-transparent text-[14px] text-ink outline-none placeholder:text-faint"
           />
           <Kbd>esc</Kbd>
         </div>
 
-        <div ref={listRef} className="max-h-[46vh] overflow-y-auto overscroll-contain p-1.5">
+        <span className="sr-only" aria-live="polite">
+          {entries.length === 0
+            ? `No results for "${query}"`
+            : `${entries.length} result${entries.length === 1 ? "" : "s"}`}
+        </span>
+
+        <div
+          ref={listRef}
+          id={listId}
+          role="listbox"
+          aria-label="Search results"
+          className="max-h-[46vh] overflow-y-auto overscroll-contain p-1.5"
+        >
           {entries.length === 0 && (
             <p className="px-2.5 py-6 text-center text-[13px] text-faint">
               Nothing matches “{query}”.
@@ -329,7 +357,7 @@ export function CommandPalette({
               entry.section !== lastSection ? (
                 <div
                   key={`h-${entry.section}`}
-                  className="px-2 pb-1 pt-2 font-mono text-[10.5px] font-semibold uppercase tracking-[0.06em] text-faint first:pt-1"
+                  className="px-2 pb-1 pt-2 text-[11px] font-medium text-muted first:pt-1"
                 >
                   {entry.section}
                 </div>
@@ -340,6 +368,9 @@ export function CommandPalette({
                 {header}
                 <button
                   type="button"
+                  id={`${listId}-opt-${i}`}
+                  role="option"
+                  aria-selected={i === clampedActive}
                   data-index={i}
                   onClick={() => runEntry(entry)}
                   onMouseMove={() => setActive(i)}

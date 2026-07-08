@@ -103,7 +103,7 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
         >
           <div
             data-state={state}
-            className="anim-fade absolute inset-0 bg-[oklch(0.08_0.005_265/0.52)]"
+            className="anim-fade absolute inset-0 bg-[oklch(0.08_0.004_80/0.52)]"
             onClick={() => settle(false)}
             aria-hidden
           />

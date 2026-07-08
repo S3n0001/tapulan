@@ -79,6 +79,12 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       className={`${GeistSans.variable} ${GeistMono.variable}`}
     >
       <body className="min-h-dvh bg-shell font-sans text-ink antialiased">
+        <a
+          href="#main"
+          className="sr-only focus:not-sr-only focus:fixed focus:left-2 focus:top-2 focus:z-[100] focus:rounded-[var(--r-control)] focus:bg-pop focus:px-3 focus:py-2 focus:text-[13px] focus:font-medium focus:text-ink focus:shadow-[var(--shadow-overlay)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color-mix(in_oklab,var(--ring)_55%,transparent)]"
+        >
+          Skip to content
+        </a>
         <Providers isAdmin={admin}>
           <ClassDetailProvider
             subjects={subjects}
@@ -98,7 +104,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               />
               <div className="flex min-h-dvh min-w-0 flex-1 flex-col lg:min-h-0 lg:p-2 lg:pl-0">
                 <MobileTopBar strands={strands} current={strand} />
-                <main className="relative flex-1 bg-bg pb-[calc(52px+env(safe-area-inset-bottom))] lg:min-h-0 lg:overflow-y-auto lg:rounded-[var(--r-panel)] lg:border lg:border-line lg:pb-0">
+                <main id="main" tabIndex={-1} className="relative flex flex-1 flex-col lg:min-h-0 focus:outline-none">
                   {children}
                 </main>
               </div>

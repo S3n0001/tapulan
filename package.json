@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "description": "Class schedule + requirements tracker for a PH Senior High section (STEM · ABM · HUMSS)",
+  "license": "MIT",
   "bin": {
     "tapulan": "cli/tapulan.mjs"
   },
@@ -11,10 +12,12 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
     "cli": "node cli/tapulan.mjs"
   },
   "dependencies": {
-    "better-sqlite3": "^12.4.1",
+    "better-sqlite3": "12.11.1",
     "clsx": "^2.1.1",
     "geist": "^1.5.1",
     "lucide-react": "^0.469.0",
@@ -34,6 +37,7 @@
     "eslint": "^9.28.0",
     "eslint-config-next": "^15.3.4",
     "tailwindcss": "^4.1.10",
-    "typescript": "^5.8.3"
+    "typescript": "^5.8.3",
+    "vitest": "^3.2.4"
   }
 }

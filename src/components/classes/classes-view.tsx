@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { BookOpen } from "lucide-react";
+import { Library } from "lucide-react";
 import {
   taskSubjectIds,
   type PeriodFull,
@@ -13,7 +13,7 @@ import {
 } from "@/lib/domain/types";
 import { accentStyle } from "@/lib/domain/hues";
 import { cn } from "@/lib/utils";
-import { Toolbar } from "@/components/shell/toolbar";
+import { ViewChrome } from "@/components/shell/view-chrome";
 import { EmptyState } from "@/components/ui/empty";
 import { useIsAdmin } from "@/components/shell/admin-context";
 import { SubjectEditor } from "@/components/admin/subject-editor";
@@ -94,21 +94,27 @@ export function ClassesView({
   const selected = selectedId !== null ? (subjects.find((s) => s.id === selectedId) ?? null) : null;
 
   return (
-    <div className="anim-view">
-      <Toolbar title="Classes" meta={<span>{subjects.length} subjects</span>} />
+    <ViewChrome
+      title="Classes"
+      icon={Library}
+      crumbs={
+        selected
+          ? [{ label: "Classes", onClick: () => select(null) }, { label: selected.name }]
+          : undefined
+      }
+      meta={<span className="tnum">{subjects.length} subjects</span>}
+    >
 
       {subjects.length === 0 ? (
-        <EmptyState icon={BookOpen} title="No subjects yet">
+        <EmptyState icon={Library} title="No subjects yet">
           Subjects appear here once an admin adds them under Admin → Subjects.
         </EmptyState>
       ) : (
         groups.map((group) => (
           <section key={group.key}>
-            <div className="sticky top-[calc(3rem+env(safe-area-inset-top)+2.75rem)] z-10 flex h-7 items-center gap-2 border-b border-line/70 bg-[color-mix(in_oklab,var(--surface)_45%,var(--bg))] px-3.5 backdrop-blur lg:top-11 lg:px-4">
-              <h3 className="font-mono text-[10.5px] font-semibold uppercase tracking-[0.06em] text-muted">
-                {group.title}
-              </h3>
-              <span className="text-[10.5px] text-faint">{group.hint}</span>
+            <div className="sticky top-[calc(3rem+env(safe-area-inset-top)+2.75rem)] z-10 flex h-7 items-center gap-2 border-b border-line/70 bg-[color-mix(in_oklab,var(--surface)_45%,var(--bg))] px-3.5 backdrop-blur lg:top-0 lg:px-4">
+              <h3 className="text-[11px] font-medium text-muted">{group.title}</h3>
+              <span className="text-[11px] text-faint">{group.hint}</span>
               <span className="tnum ml-auto font-mono text-[10.5px] text-faint">
                 {group.list.length}
               </span>
@@ -208,6 +214,6 @@ export function ClassesView({
           onClose={() => setEditing(null)}
         />
       )}
-    </div>
+    </ViewChrome>
   );
 }

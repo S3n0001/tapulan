@@ -1,4 +1,5 @@
-import { Toolbar } from "@/components/shell/toolbar";
+import { CalendarDays } from "lucide-react";
+import { ViewChrome } from "@/components/shell/view-chrome";
 import { Skeleton } from "@/components/ui/skeleton";
 
 /**
@@ -77,12 +78,17 @@ function GhostGutter({ px, width }: { px: number; width: number }) {
 
 export default function WeekLoading() {
   return (
-    <div aria-busy="true">
-      <span role="status" className="sr-only">
-        Loading the week…
-      </span>
-      <Toolbar title="Week" meta={<Skeleton className="h-3 w-20" />}>
-        {/* mobile day tabs */}
+    <ViewChrome
+      title="Week"
+      icon={CalendarDays}
+      meta={<Skeleton className="h-3.5 w-20" />}
+      right={
+        <span className="flex items-center gap-0.5">
+          <Skeleton className="size-7 rounded-[var(--r-control)]" />
+          <Skeleton className="size-7 rounded-[var(--r-control)]" />
+        </span>
+      }
+      mobileSubrow={
         <div className="grid grid-cols-5 lg:hidden" aria-hidden>
           {[0, 1, 2, 3, 4].map((i) => (
             <div key={i} className="flex h-11 flex-col items-center justify-center gap-1">
@@ -91,11 +97,15 @@ export default function WeekLoading() {
             </div>
           ))}
         </div>
-      </Toolbar>
+      }
+    >
+      <span role="status" className="sr-only">
+        Loading the week…
+      </span>
 
       {/* desktop grid */}
       <div className="hidden lg:block">
-        <div className="sticky top-11 z-10 grid grid-cols-[48px_repeat(5,minmax(0,1fr))] border-b border-line bg-bg/95 backdrop-blur">
+        <div className="sticky top-0 z-10 grid grid-cols-[48px_repeat(5,minmax(0,1fr))] border-b border-line bg-bg/95 backdrop-blur">
           <div />
           {[0, 1, 2, 3, 4].map((i) => (
             <div
@@ -122,6 +132,6 @@ export default function WeekLoading() {
           <GhostColumn px={PX_MOBILE} />
         </div>
       </div>
-    </div>
+    </ViewChrome>
   );
 }

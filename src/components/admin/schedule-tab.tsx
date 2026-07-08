@@ -88,9 +88,7 @@ export function ScheduleTab({
           return (
             <section key={day}>
               <div className="sticky top-0 z-10 flex h-7 items-center gap-2 border-b border-line/70 bg-[color-mix(in_oklab,var(--surface)_45%,var(--bg))] px-3.5 backdrop-blur lg:px-4">
-                <h3 className="font-mono text-[10.5px] font-semibold uppercase tracking-[0.06em] text-muted">
-                  {DAY_NAMES[day]}
-                </h3>
+                <h3 className="text-[11px] font-medium text-muted">{DAY_NAMES[day]}</h3>
                 <span className="tnum font-mono text-[10.5px] text-faint">{list.length}</span>
                 <button
                   type="button"

@@ -1,23 +1,28 @@
-import { Toolbar } from "@/components/shell/toolbar";
+import { Lock } from "lucide-react";
+import { ViewChrome } from "@/components/shell/view-chrome";
 import { Skeleton } from "@/components/ui/skeleton";
 
 /** Admin, loading — toolbar, tab strip, and a neutral row list. */
 
 export default function AdminLoading() {
   return (
-    <div aria-busy="true">
-      <span role="status" className="sr-only">
-        Loading admin…
-      </span>
-      <Toolbar title="Admin" meta={<Skeleton className="h-3 w-32" />}>
+    <ViewChrome
+      title="Admin"
+      icon={Lock}
+      right={<Skeleton className="h-7 w-[76px] rounded-[var(--r-control)]" />}
+      subrow={
         <div className="flex items-center gap-1 px-2 lg:px-2.5" aria-hidden>
           {["w-12", "w-16", "w-16", "w-14"].map((w, i) => (
-            <span key={i} className="px-2 pb-2.5 pt-1">
+            <span key={i} className="flex h-[33px] items-center px-2 pb-2.5 pt-1">
               <Skeleton className={`h-3.5 ${w}`} />
             </span>
           ))}
         </div>
-      </Toolbar>
+      }
+    >
+      <span role="status" className="sr-only">
+        Loading admin…
+      </span>
 
       <div>
         <div className="flex h-11 items-center gap-2 border-b border-line px-3.5 lg:px-4">
@@ -35,6 +40,6 @@ export default function AdminLoading() {
           ))}
         </div>
       </div>
-    </div>
+    </ViewChrome>
   );
 }

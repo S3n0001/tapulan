@@ -21,6 +21,7 @@ import { usePresence } from "@/hooks/use-presence";
  */
 
 interface TriggerProps {
+  id?: string;
   onClick: (e: React.MouseEvent) => void;
   "aria-expanded": boolean;
   "aria-haspopup": "menu";
@@ -43,19 +44,35 @@ export function Menu({
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLSpanElement>(null);
   const popRef = useRef<HTMLDivElement>(null);
+  const restoreRef = useRef<HTMLElement | null>(null);
   const menuId = useId();
+  const triggerId = useId();
   const { mounted, state } = usePresence(open, 140);
+
+  // focus the first item on open; trap Tab inside; restore focus on close
+  useEffect(() => {
+    if (!open) return;
+    restoreRef.current = document.activeElement as HTMLElement | null;
+    const first = popRef.current?.querySelector<HTMLElement>(
+      '[role="menuitem"]:not([disabled])'
+    );
+    first?.focus();
+    return () => restoreRef.current?.focus?.();
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
     function onDown(e: MouseEvent | TouchEvent) {
       if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
     }
+    // capture phase so Escape is swallowed before an enclosing Panel's
+    // document-level listener sees it — one press closes only the menu
+    function onEsc(e: KeyboardEvent) {
+      if (e.key !== "Escape") return;
+      e.stopPropagation();
+      setOpen(false);
+    }
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") {
-        setOpen(false);
-        return;
-      }
       if (e.key === "ArrowDown" || e.key === "ArrowUp") {
         e.preventDefault();
         const items = [
@@ -69,14 +86,36 @@ export function Menu({
             ? items[(idx + 1) % items.length]
             : items[(idx - 1 + items.length) % items.length];
         next.focus();
+        return;
+      }
+      if (e.key === "Tab") {
+        // keep focus inside the popup; Shift+Tab from the first item (or a
+        // bare Tab from the last) wraps instead of escaping to the page
+        const items = [
+          ...(popRef.current?.querySelectorAll<HTMLElement>('[role="menuitem"]:not([disabled])') ??
+            []),
+        ];
+        if (items.length === 0) return;
+        const first = items[0];
+        const last = items[items.length - 1];
+        const activeEl = document.activeElement;
+        if (e.shiftKey && activeEl === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && activeEl === last) {
+          e.preventDefault();
+          first.focus();
+        }
       }
     }
     document.addEventListener("mousedown", onDown);
     document.addEventListener("touchstart", onDown);
+    document.addEventListener("keydown", onEsc, true);
     document.addEventListener("keydown", onKey);
     return () => {
       document.removeEventListener("mousedown", onDown);
       document.removeEventListener("touchstart", onDown);
+      document.removeEventListener("keydown", onEsc, true);
       document.removeEventListener("keydown", onKey);
     };
   }, [open]);
@@ -84,6 +123,7 @@ export function Menu({
   if (!isValidElement(trigger)) return null;
 
   const wired = cloneElement(trigger, {
+    id: triggerId,
     onClick: (e: React.MouseEvent) => {
       e.stopPropagation();
       setOpen((v) => !v);
@@ -103,6 +143,7 @@ export function Menu({
           ref={popRef}
           id={menuId}
           role="menu"
+          aria-labelledby={triggerId}
           data-state={state}
           style={{ width }}
           className={cn(
@@ -157,7 +198,7 @@ export function MenuItem({
 
 export function MenuLabel({ children }: { children: ReactNode }) {
   return (
-    <div className="px-2 pb-1 pt-1.5 font-mono text-[10.5px] font-semibold uppercase tracking-[0.06em] text-faint">
+    <div className="px-2 pb-1 pt-1.5 text-[11px] font-medium text-muted">
       {children}
     </div>
   );

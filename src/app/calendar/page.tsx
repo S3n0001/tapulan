@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { currentStrand } from "@/lib/session";
-import { getDayMarks, getTasks } from "@/lib/queries";
+import { getDayMarks, getPeriods, getSubjects, getTaskTypes, getTasks } from "@/lib/queries";
 import { parseMonthKey } from "@/lib/domain/time";
 import { CalendarView } from "@/components/calendar/calendar-view";
 
@@ -21,6 +21,9 @@ export default async function CalendarPage({
     <CalendarView
       tasks={getTasks(strand)}
       marks={getDayMarks()}
+      subjects={getSubjects(strand)}
+      types={getTaskTypes()}
+      periods={getPeriods(strand)}
       strand={strand}
       initialMonth={parseMonthKey(m)}
       nowISO={new Date().toISOString()}

@@ -1,4 +1,6 @@
-import type { PeriodFull } from "./types";
+import { taskSubjectIds, type ClassMeeting, type PeriodFull } from "./types";
+import { fromISODate } from "./time";
+import { isoWeekday } from "./recurrence";
 
 /**
  * Pure scheduling logic shared by the Today and Week views. No I/O, no
@@ -6,6 +8,29 @@ import type { PeriodFull } from "./types";
  */
 
 export type PeriodState = "past" | "current" | "upcoming";
+
+/**
+ * The class meeting a held-in-class task sits in: the period on the task's due
+ * date where one of its subjects (its class, or its collab) meets. The earliest
+ * match wins; returns null when the subject doesn't meet that weekday — a
+ * movable test, where the UI falls back to a plain "In class" with no clock.
+ * Pure, so the editor can preview it live and the read layer can bake it in.
+ */
+export function classMeetingFor(
+  task: { subjectId: number; secondarySubjectId: number | null; dueDate: string },
+  periods: PeriodFull[]
+): ClassMeeting | null {
+  const wd = isoWeekday(fromISODate(task.dueDate));
+  if (wd < 1 || wd > 5) return null;
+  const ids = taskSubjectIds(task);
+  let best: PeriodFull | null = null;
+  for (const p of periods) {
+    if (p.kind !== "class" || p.day !== wd || p.subjectId === null) continue;
+    if (!ids.includes(p.subjectId)) continue;
+    if (!best || p.start < best.start) best = p;
+  }
+  return best ? { start: best.start, end: best.end, subjectId: best.subjectId! } : null;
+}
 
 export interface ResolvedDay {
   /** 1 = Monday … 5 = Friday */

@@ -57,7 +57,7 @@ export interface TaskGroup {
 export function groupByBucket(tasks: TaskFull[], now: Date): TaskGroup[] {
   const map = new Map<Bucket, TaskFull[]>();
   for (const t of tasks) {
-    const b = bucketOf(t.dueDate, now, t.dueTime);
+    const b = bucketOf(t.dueDate, now, dueMinOf(t));
     (map.get(b) ?? map.set(b, []).get(b)!).push(t);
   }
   return BUCKET_ORDER.filter((b) => map.has(b)).map((bucket) => ({
@@ -72,6 +72,39 @@ export function isActionable(t: TaskFull): boolean {
   return t.status !== "cancelled" && t.status !== "done" && !t.doneInClass;
 }
 
+/** A task's timing, held-in-class aware — enough of a task to resolve it. */
+type Timed = Pick<TaskFull, "heldInClass" | "dueTime" | "classMeeting">;
+
+/**
+ * The clock minute a held-in-class task actually happens — an explicit time
+ * overrides, else the class meeting's start. null for a normal task (it has a
+ * deadline, not a start), or a held task whose class doesn't meet that day.
+ */
+export function classTimeOf(t: Timed): number | null {
+  if (!t.heldInClass) return null;
+  return t.dueTime ?? t.classMeeting?.start ?? null;
+}
+
+/**
+ * The minute a task's deadline expires, for overdue/bucket math. A normal task
+ * uses its due time (null = end of day); a held-in-class one expires when its
+ * meeting ends — so a UT isn't "overdue" from midnight — unless a time is set.
+ */
+export function dueMinOf(t: Timed): number | null {
+  if (t.heldInClass) return t.dueTime ?? t.classMeeting?.end ?? null;
+  return t.dueTime;
+}
+
+/**
+ * The clock minute to sort a task by within its due date: a held-in-class
+ * task sorts by when it actually happens (classTimeOf); everything else by
+ * its due time, with untimed tasks last. Used to order the day agenda,
+ * calendar cells, and the Today "due soon" rail consistently.
+ */
+export function sortMinOf(t: Timed): number {
+  return classTimeOf(t) ?? dueMinOf(t) ?? Infinity;
+}
+
 /**
  * Upcoming, still-actionable tasks due within [today, +days] — excludes
  * anything already overdue (see `overdue`) so a "due soon" count is honest.
@@ -79,14 +112,14 @@ export function isActionable(t: TaskFull): boolean {
 export function dueSoon(tasks: TaskFull[], now: Date, days = 7): TaskFull[] {
   return tasks.filter((t) => {
     if (!isActionable(t)) return false;
-    if (isPastDue(t.dueDate, t.dueTime, now)) return false;
+    if (isPastDue(t.dueDate, dueMinOf(t), now)) return false;
     return daysUntil(t.dueDate, now) <= days;
   });
 }
 
 /** Still-actionable tasks whose deadline has already passed. */
 export function overdue(tasks: TaskFull[], now: Date): TaskFull[] {
-  return tasks.filter((t) => isActionable(t) && isPastDue(t.dueDate, t.dueTime, now));
+  return tasks.filter((t) => isActionable(t) && isPastDue(t.dueDate, dueMinOf(t), now));
 }
 
 /** Tasks whose due date falls in [fromISO, toISO] inclusive (ISO strings sort lexically). */

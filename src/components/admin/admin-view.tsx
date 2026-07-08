@@ -16,7 +16,7 @@ import type {
   Teacher,
 } from "@/lib/domain/types";
 import { cn } from "@/lib/utils";
-import { Toolbar } from "@/components/shell/toolbar";
+import { ViewChrome } from "@/components/shell/view-chrome";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/field";
 import { useToast } from "@/components/ui/toast";
@@ -47,8 +47,7 @@ export function AdminLogin() {
   }
 
   return (
-    <div className="anim-view">
-      <Toolbar title="Admin" />
+    <ViewChrome title="Admin" icon={Lock}>
       <div className="mx-auto flex w-full max-w-[300px] flex-col items-center px-4 pt-[16vh] text-center">
         <div className="flex size-10 items-center justify-center rounded-[var(--r-card)] border border-line bg-surface text-muted">
           <Lock className="size-4.5" strokeWidth={1.75} />
@@ -90,7 +89,7 @@ export function AdminLogin() {
           </Button>
         </form>
       </div>
-    </div>
+    </ViewChrome>
   );
 }
 
@@ -143,22 +142,16 @@ export function AdminDashboard({
   }
 
   return (
-    <div className="anim-view">
-      <Toolbar
-        title="Admin"
-        meta={
-          <span className="flex items-center gap-1.5 font-sans">
-            <span className="size-1.5 rounded-full bg-ok" aria-hidden />
-            live for the whole section
-          </span>
-        }
-        right={
-          <Button size="sm" variant="ghost" loading={pending} onClick={signOut}>
-            <LogOut className="size-3.5" />
-            Sign out
-          </Button>
-        }
-      >
+    <ViewChrome
+      title="Admin"
+      icon={Lock}
+      right={
+        <Button size="sm" variant="ghost" loading={pending} onClick={signOut}>
+          <LogOut className="size-3.5" />
+          Sign out
+        </Button>
+      }
+      subrow={
         <div
           role="tablist"
           aria-label="Admin sections"
@@ -185,11 +178,19 @@ export function AdminDashboard({
             );
           })}
         </div>
-      </Toolbar>
+      }
+    >
 
       <div key={tab} className="anim-fade">
         {tab === "tasks" && (
-          <TasksView tasks={tasks} subjects={subjects} types={types} nowISO={nowISO} embedded />
+          <TasksView
+            tasks={tasks}
+            subjects={subjects}
+            types={types}
+            periods={periods}
+            nowISO={nowISO}
+            embedded
+          />
         )}
         {tab === "schedule" && (
           <ScheduleTab
@@ -205,6 +206,6 @@ export function AdminDashboard({
         )}
         {tab === "settings" && <SettingsTab settings={settings} counts={counts} tokens={tokens} />}
       </div>
-    </div>
+    </ViewChrome>
   );
 }

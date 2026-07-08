@@ -44,10 +44,18 @@ export async function GET(request: Request): Promise<Response> {
   for (const t of getTasks(strand)) {
     if (t.status === "cancelled") continue;
 
+    // A held-in-class task spans its class meeting (or an explicit override);
+    // a normal one is a point at its due time, else an all-day entry.
+    const meeting = t.heldInClass ? t.classMeeting : null;
+    const startMin = t.heldInClass ? (t.dueTime ?? meeting?.start ?? null) : t.dueTime;
+    const endMin = t.heldInClass ? (t.dueTime ?? meeting?.end ?? startMin) : t.dueTime;
+
     lines.push("BEGIN:VEVENT", `UID:task-${t.id}@tapulan`, `DTSTAMP:${stamp}`);
-    if (t.dueTime !== null) {
-      const dt = dateTime(t.dueDate, t.dueTime);
-      lines.push(`DTSTART:${dt}`, `DTEND:${dt}`);
+    if (startMin !== null) {
+      lines.push(
+        `DTSTART:${dateTime(t.dueDate, startMin)}`,
+        `DTEND:${dateTime(t.dueDate, endMin ?? startMin)}`
+      );
     } else {
       lines.push(
         `DTSTART;VALUE=DATE:${dateOnly(t.dueDate)}`,
@@ -64,6 +72,7 @@ export async function GET(request: Request): Promise<Response> {
         ? `Subjects: ${t.subject.name} × ${t.secondarySubject.name}`
         : `Subject: ${t.subject.name}`,
     ];
+    if (t.heldInClass) desc.push("Sat in class");
     if (t.points !== null) desc.push(`${t.points} pts`);
     if (t.movedFrom) desc.push(`Moved from ${t.movedFrom}`);
     if (t.details.trim()) desc.push(t.details.trim());

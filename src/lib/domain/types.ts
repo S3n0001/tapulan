@@ -130,6 +130,13 @@ export interface Task {
   status: TaskStatus;
   /** section-wide "finished during class" marker, admin-set (not personal) */
   doneInClass: boolean;
+  /**
+   * Sat *during* the class meeting (a UT, quiz, oral, performance task) rather
+   * than submitted by a deadline — so "end of day" is the wrong time. The
+   * actual moment is resolved from the schedule (see `TaskFull.classMeeting`).
+   * Distinct from `doneInClass`, which is the retrospective "already finished".
+   */
+  heldInClass: boolean;
   /** original YYYY-MM-DD when the date was moved */
   movedFrom: string | null;
   /** why it was called off — shown only when status is "cancelled" (optional) */
@@ -151,12 +158,27 @@ export interface TaskLink {
   sort: number;
 }
 
+/** The class period a held-in-class task sits in, resolved from the schedule. */
+export interface ClassMeeting {
+  /** minutes from midnight */
+  start: number;
+  end: number;
+  /** which of the task's subjects meets then (its class or its collab) */
+  subjectId: number;
+}
+
 export interface TaskFull extends Task {
   subject: SubjectFull;
   /** resolved collab class, when `secondarySubjectId` is set */
   secondarySubject: SubjectFull | null;
   type: TaskType;
   links: TaskLink[];
+  /**
+   * For a held-in-class task, the meeting on its due date its subject meets —
+   * the honest time it happens. null when `heldInClass` is false, or when the
+   * subject doesn't meet that weekday (a movable test; UI shows a plain tag).
+   */
+  classMeeting: ClassMeeting | null;
 }
 
 /** Every subject a task belongs to (its class, plus a collab if any). */

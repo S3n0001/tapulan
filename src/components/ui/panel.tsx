@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -24,6 +24,7 @@ export function Panel({
   footer,
   children,
   wide = false,
+  modal = true,
   onCmdEnter,
 }: {
   open: boolean;
@@ -34,6 +35,9 @@ export function Panel({
   children: ReactNode;
   /** 480px editors vs 408px detail views (desktop only) */
   wide?: boolean;
+  /** false: desktop side-peek keeps the page behind live — no scrim, no scroll
+   *  lock, no focus trap (Esc/X still close). Below lg it stays a modal sheet. */
+  modal?: boolean;
   /** editors: ⌘/Ctrl+Enter saves from anywhere inside the panel */
   onCmdEnter?: () => void;
 }) {
@@ -41,6 +45,16 @@ export function Panel({
   const restoreRef = useRef<HTMLElement | null>(null);
   const labelId = useId();
   const { mounted, state } = usePresence(open);
+
+  const [desktop, setDesktop] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 1024px)");
+    const sync = () => setDesktop(mq.matches);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
+  const nonModal = !modal && desktop;
 
   // focus in on open, restore on close
   useEffect(() => {
@@ -52,18 +66,25 @@ export function Panel({
       el?.querySelector<HTMLElement>(FOCUSABLE) ??
       el;
     target?.focus({ preventScroll: true });
-    return () => restoreRef.current?.focus?.({ preventScroll: true });
+    return () => {
+      // restore only if focus is still ours to give back — when the close
+      // races another surface's autofocus (e.g. an editor opened as this
+      // panel's URL-driven close commits), stealing focus back would send
+      // the user's typing to a control behind that surface
+      if (el?.contains(document.activeElement) || document.activeElement === document.body)
+        restoreRef.current?.focus?.({ preventScroll: true });
+    };
   }, [open]);
 
-  // scroll lock
+  // scroll lock (modal only — a non-modal peek leaves the page scrollable)
   useEffect(() => {
-    if (!open) return;
+    if (!open || nonModal) return;
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {
       document.body.style.overflow = prev;
     };
-  }, [open]);
+  }, [open, nonModal]);
 
   // escape + save shortcut + tab trap
   useEffect(() => {
@@ -79,7 +100,7 @@ export function Panel({
         onCmdEnter();
         return;
       }
-      if (e.key !== "Tab" || !ref.current) return;
+      if (e.key !== "Tab" || nonModal || !ref.current) return;
       const items = [...ref.current.querySelectorAll<HTMLElement>(FOCUSABLE)].filter(
         (n) => !n.hasAttribute("disabled") && n.offsetParent !== null
       );
@@ -97,22 +118,24 @@ export function Panel({
     }
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [open, onClose, onCmdEnter]);
+  }, [open, nonModal, onClose, onCmdEnter]);
 
   if (!mounted || typeof document === "undefined") return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-40">
-      <div
-        data-state={state}
-        className="anim-fade absolute inset-0 bg-[oklch(0.04_0.004_265/0.6)]"
-        onClick={onClose}
-        aria-hidden
-      />
+    <div className={cn("fixed inset-0 z-40", nonModal && "pointer-events-none")}>
+      {!nonModal && (
+        <div
+          data-state={state}
+          className="anim-fade absolute inset-0 bg-[oklch(0.08_0.004_80/0.52)]"
+          onClick={onClose}
+          aria-hidden
+        />
+      )}
       <div
         ref={ref}
         role="dialog"
-        aria-modal="true"
+        aria-modal={nonModal ? undefined : "true"}
         aria-labelledby={labelId}
         tabIndex={-1}
         data-state={state}
@@ -125,7 +148,9 @@ export function Panel({
           "inset-x-0 bottom-0 max-h-[88dvh] rounded-t-[14px] border-t border-line",
           // desktop: right peek panel aligned with the inset content frame
           "lg:inset-x-auto lg:inset-y-2 lg:right-2 lg:max-h-none lg:rounded-[var(--r-panel)] lg:border lg:shadow-[var(--shadow-overlay)]",
-          wide ? "lg:w-[480px]" : "lg:w-[408px]"
+          wide ? "lg:w-[480px]" : "lg:w-[408px]",
+          // no scrim to read against, so a firmer edge carries the elevation
+          nonModal && "pointer-events-auto lg:border-line-strong"
         )}
       >
         <header className="flex items-start gap-3 border-b border-line px-4 pb-3 pt-4">

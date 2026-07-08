@@ -95,6 +95,9 @@ CREATE TABLE IF NOT EXISTS tasks (
   -- section-wide "finished during class" marker (admin-set, 0/1). Distinct
   -- from the per-device personal "done for me" and from status='done'.
   done_in_class INTEGER NOT NULL DEFAULT 0,
+  -- sat *during* the class meeting (UT/quiz/oral), so its time comes from the
+  -- schedule, not an end-of-day deadline. Prospective; distinct from done_in_class.
+  held_in_class INTEGER NOT NULL DEFAULT 0,
   moved_from TEXT,
   cancel_reason TEXT,                          -- why it was called off (only when cancelled)
   note       TEXT,
@@ -121,5 +124,13 @@ CREATE TABLE IF NOT EXISTS api_tokens (
   label        TEXT NOT NULL,
   created_at   TEXT NOT NULL,
   last_used_at TEXT
+);
+
+-- shared admin-login rate limiter (web + CLI), keyed by client IP so state
+-- survives redeploys instead of living in a module-level Map
+CREATE TABLE IF NOT EXISTS login_attempts (
+  key   TEXT PRIMARY KEY,   -- client IP (or a constant fallback if unknown)
+  count INTEGER NOT NULL DEFAULT 0,
+  until INTEGER NOT NULL DEFAULT 0   -- epoch ms; lockout expiry
 );
 `;

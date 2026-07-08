@@ -74,6 +74,16 @@ export function fromISODate(iso: string): Date {
   return new Date(y, (m || 1) - 1, d || 1);
 }
 
+const FMT_MANILA_ISO = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Manila" });
+
+/**
+ * Today in Asia/Manila as YYYY-MM-DD — the section's fixed timezone,
+ * independent of the device's local clock/timezone.
+ */
+export function todayISO(): string {
+  return FMT_MANILA_ISO.format(new Date());
+}
+
 export function isISODate(value: string): boolean {
   // round-trip so calendar-impossible dates (Feb 31, month 13) that Date
   // would silently normalize to another day are rejected

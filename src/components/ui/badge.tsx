@@ -57,7 +57,7 @@ export function Status({ status, className }: { status: TaskStatus; className?: 
 /** Small amber marker for moved / unconfirmed inline flags. */
 export function WarnFlag({ children }: { children: ReactNode }) {
   return (
-    <span className="inline-flex h-[17px] shrink-0 items-center rounded-[4px] bg-[color-mix(in_oklab,var(--warn)_16%,var(--bg))] px-1 font-mono text-[10px] font-semibold uppercase tracking-[0.03em] text-warn-text">
+    <span className="inline-flex h-[17px] shrink-0 items-center rounded-[4px] bg-[color-mix(in_oklab,var(--warn)_16%,var(--bg))] px-1.5 text-[11px] font-medium text-warn-text">
       {children}
     </span>
   );
@@ -66,7 +66,16 @@ export function WarnFlag({ children }: { children: ReactNode }) {
 /** Positive marker for completed states like done-in-class. */
 export function OkFlag({ children }: { children: ReactNode }) {
   return (
-    <span className="inline-flex h-[17px] shrink-0 items-center rounded-[4px] bg-[color-mix(in_oklab,var(--ok)_16%,var(--bg))] px-1 font-mono text-[10px] font-semibold uppercase tracking-[0.03em] text-ok-text">
+    <span className="inline-flex h-[17px] shrink-0 items-center rounded-[4px] bg-[color-mix(in_oklab,var(--ok)_16%,var(--bg))] px-1.5 text-[11px] font-medium text-ok-text">
+      {children}
+    </span>
+  );
+}
+
+/** Brand-tinted informational marker — an upcoming fact like a held-in-class UT. */
+export function InfoFlag({ children }: { children: ReactNode }) {
+  return (
+    <span className="inline-flex h-[17px] shrink-0 items-center rounded-[4px] bg-[color-mix(in_oklab,var(--brand)_16%,var(--bg))] px-1.5 text-[11px] font-medium text-brand-text">
       {children}
     </span>
   );
@@ -75,7 +84,7 @@ export function OkFlag({ children }: { children: ReactNode }) {
 /** Muted marker for terminal states like cancelled — neutral, never alarming. */
 export function MutedFlag({ children }: { children: ReactNode }) {
   return (
-    <span className="inline-flex h-[17px] shrink-0 items-center rounded-[4px] bg-surface-2 px-1 font-mono text-[10px] font-semibold uppercase tracking-[0.03em] text-faint">
+    <span className="inline-flex h-[17px] shrink-0 items-center rounded-[4px] bg-surface-2 px-1.5 text-[11px] font-medium text-faint">
       {children}
     </span>
   );
