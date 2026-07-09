@@ -24,11 +24,13 @@ function clearContent(db = getDb()): void {
     DELETE FROM task_series;
     DELETE FROM task_types;
     DELETE FROM day_marks;
+    DELETE FROM calendar_blocks;
+    DELETE FROM calendars;
     DELETE FROM periods;
     DELETE FROM subjects;
     DELETE FROM teachers;
     DELETE FROM strands;
-    DELETE FROM sqlite_sequence WHERE name IN ('task_links','tasks','task_series','task_types','periods','subjects','teachers');
+    DELETE FROM sqlite_sequence WHERE name IN ('task_links','tasks','task_series','task_types','periods','subjects','teachers','calendars','calendar_blocks');
   `);
 }
 
@@ -64,6 +66,8 @@ interface Backup {
   subjects?: unknown[];
   periods?: unknown[];
   dayMarks?: unknown[];
+  calendars?: unknown[];
+  calendarBlocks?: unknown[];
   taskTypes?: unknown[];
   taskSeries?: unknown[];
   tasks?: unknown[];
@@ -186,6 +190,58 @@ export async function importBackup(json: string): Promise<ActionResult> {
           });
         }
 
+        // Individual calendars, then their blocks (FK: blocks need their
+        // parent calendar to exist first).
+        const insertCalendar = db.prepare(
+          `INSERT INTO calendars (id, name, subtitle, hue, published, sort, created_at)
+           VALUES (@id, @name, @subtitle, @hue, @published, @sort, @created_at)`
+        );
+        const calNow = new Date().toISOString();
+        for (const c of rows<Record<string, unknown>>(data.calendars)) {
+          insertCalendar.run({
+            id: Number(c.id),
+            name: String(c.name ?? ""),
+            subtitle: c.subtitle != null ? String(c.subtitle) : null,
+            hue: String(c.hue ?? "slate"),
+            published: c.published ? 1 : 0,
+            sort: Number(c.sort ?? 0) || 0,
+            created_at: String(c.created_at ?? calNow),
+          });
+        }
+
+        const insertCalBlock = db.prepare(
+          `INSERT INTO calendar_blocks (id, calendar_id, day, start_min, end_min, label, note)
+           VALUES (@id, @calendar_id, @day, @start_min, @end_min, @label, @note)`
+        );
+        let skippedBlocks = 0;
+        for (const b of rows<Record<string, unknown>>(data.calendarBlocks)) {
+          const day = Number(b.day);
+          const start = Number(b.start_min);
+          const end = Number(b.end_min);
+          const label = String(b.label ?? "").trim();
+          if (
+            !Number.isInteger(day) ||
+            day < 0 ||
+            day > 6 ||
+            !Number.isFinite(start) ||
+            !Number.isFinite(end) ||
+            end <= start ||
+            !label
+          ) {
+            skippedBlocks++;
+            continue;
+          }
+          insertCalBlock.run({
+            id: Number(b.id),
+            calendar_id: Number(b.calendar_id),
+            day,
+            start_min: Math.trunc(start),
+            end_min: Math.trunc(end),
+            label,
+            note: b.note != null ? String(b.note) : null,
+          });
+        }
+
         const insertSeries = db.prepare(
           `INSERT INTO task_series (id, title, freq, interval, weekdays, nth, weekday, start_date, end_date, count, created_at)
            VALUES (@id, @title, @freq, @interval, @weekdays, @nth, @weekday, @start_date, @end_date, @count, @created_at)`
@@ -268,7 +324,7 @@ export async function importBackup(json: string): Promise<ActionResult> {
           });
         }
 
-        if (skippedTasks || skippedLinks) {
+        if (skippedTasks || skippedLinks || skippedBlocks) {
           console.error(
             JSON.stringify({
               level: "warn",
@@ -276,6 +332,7 @@ export async function importBackup(json: string): Promise<ActionResult> {
               message: "Skipped invalid rows during restore.",
               skippedTasks,
               skippedLinks,
+              skippedBlocks,
             })
           );
         }

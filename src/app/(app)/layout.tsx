@@ -4,6 +4,7 @@ import { isAdmin } from "@/lib/auth";
 import {
   getOpenTaskCount,
   getPeriods,
+  getPublishedCalendars,
   getSettings,
   getStrands,
   getSubjects,
@@ -33,6 +34,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const strands = getStrands();
   const settings = getSettings();
   const openCount = getOpenTaskCount(strand);
+  // published individual calendars — the read-only viewer in the Settings modal
+  const calendars = getPublishedCalendars();
 
   // Strand-scoped snapshot shared by the ⌘K palette and the app-wide class
   // peek panel, fetched once here (the layout is already dynamic on cookies).
@@ -99,7 +102,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           tasks={paletteTasks}
           subjects={paletteSubjects}
         />
-        <SettingsModal strands={strands} current={strand} />
+        <SettingsModal strands={strands} current={strand} calendars={calendars} />
       </ClassDetailProvider>
     </AppProviders>
   );

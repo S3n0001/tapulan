@@ -39,6 +39,17 @@ export function fmtMinAmPm(min: number): string {
   return `${fmtMin(min)} ${h24 < 12 ? "AM" : "PM"}`;
 }
 
+/**
+ * Compact time range: "9:00–11:00 AM" when both ends share a meridiem, else
+ * "9:00 AM – 5:00 PM". Keeps a work block or class slot readable at a glance.
+ */
+export function fmtTimeRange(start: number, end: number): string {
+  const sameMeridiem = start < 720 === end < 720;
+  return sameMeridiem
+    ? `${fmtMin(start)}–${fmtMinAmPm(end)}`
+    : `${fmtMinAmPm(start)} – ${fmtMinAmPm(end)}`;
+}
+
 /** "1h 30m" / "45m" */
 export function fmtDuration(mins: number): string {
   const h = Math.floor(mins / 60);

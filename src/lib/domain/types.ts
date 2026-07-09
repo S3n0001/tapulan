@@ -195,3 +195,38 @@ export interface Settings {
   sectionName: string;
   schoolYear: string;
 }
+
+/**
+ * A personal/individual calendar an admin curates — a work roster, a person's
+ * timetable, a duty rota. Its blocks are recurring weekly time slots. Distinct
+ * from the section's class `periods`; gated to everyone by `published`.
+ */
+export interface Calendar {
+  id: number;
+  name: string;
+  /** optional secondary line — whose calendar it is, or what it covers */
+  subtitle: string | null;
+  hue: string;
+  /** visible to everyone in Settings when true; an admin-only draft otherwise */
+  published: boolean;
+  sort: number;
+  createdAt: string;
+}
+
+/** One recurring weekly block on a calendar. */
+export interface CalendarBlock {
+  id: number;
+  calendarId: number;
+  /** 0 = Sunday … 6 = Saturday (weekends allowed, unlike class periods) */
+  day: number;
+  /** minutes from midnight */
+  start: number;
+  end: number;
+  label: string;
+  note: string | null;
+}
+
+export interface CalendarFull extends Calendar {
+  /** the calendar's blocks, ordered Monday-first then by start time */
+  blocks: CalendarBlock[];
+}

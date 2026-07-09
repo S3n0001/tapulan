@@ -133,4 +133,31 @@ CREATE TABLE IF NOT EXISTS login_attempts (
   count INTEGER NOT NULL DEFAULT 0,
   until INTEGER NOT NULL DEFAULT 0   -- epoch ms; lockout expiry
 );
+
+-- Individual (personal) calendars: an admin-curated weekly schedule for one
+-- person or purpose — a work roster, someone's class timetable, a duty rota.
+-- Separate from the section's class periods: any weekday including weekends,
+-- no subject/strand binding, and gated by the published flag (visible to
+-- everyone in Settings when set, an admin-only draft otherwise).
+CREATE TABLE IF NOT EXISTS calendars (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  name       TEXT NOT NULL,
+  subtitle   TEXT,                         -- optional: whose / what it is
+  hue        TEXT NOT NULL DEFAULT 'slate',
+  published  INTEGER NOT NULL DEFAULT 0,   -- 1 = shown to everyone in Settings
+  sort       INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL
+);
+
+-- One recurring weekly time block on a calendar (e.g. "Work · Mon 9:00–17:00").
+CREATE TABLE IF NOT EXISTS calendar_blocks (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  calendar_id INTEGER NOT NULL REFERENCES calendars(id) ON DELETE CASCADE,
+  day         INTEGER NOT NULL CHECK (day BETWEEN 0 AND 6),  -- 0 = Sun … 6 = Sat
+  start_min   INTEGER NOT NULL,
+  end_min     INTEGER NOT NULL,
+  label       TEXT NOT NULL,
+  note        TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_calendar_blocks_cal ON calendar_blocks(calendar_id, day, start_min);
 `;

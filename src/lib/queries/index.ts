@@ -3,7 +3,11 @@ import { cache } from "react";
 import { getDb, getMeta } from "@/lib/db";
 import { classMeetingFor } from "@/lib/domain/schedule";
 import { sortMinOf } from "@/lib/domain/tasks";
+import { monFirstIndex } from "@/lib/domain/calendar";
 import type {
+  Calendar,
+  CalendarBlock,
+  CalendarFull,
   DayMark,
   DayMarkKind,
   Period,
@@ -247,6 +251,94 @@ export function getDayMarkMap(fromISO: string, toISO: string): Map<string, DayMa
   return new Map(rows.map((r) => [r.date, r]));
 }
 
+// --------------------------------------------------------- calendars
+
+interface CalendarRow {
+  id: number;
+  name: string;
+  subtitle: string | null;
+  hue: string;
+  published: number;
+  sort: number;
+  created_at: string;
+}
+
+interface CalendarBlockRow {
+  id: number;
+  calendar_id: number;
+  day: number;
+  start_min: number;
+  end_min: number;
+  label: string;
+  note: string | null;
+}
+
+function mapCalendar(row: CalendarRow): Calendar {
+  return {
+    id: row.id,
+    name: row.name,
+    subtitle: row.subtitle,
+    hue: row.hue,
+    published: !!row.published,
+    sort: row.sort,
+    createdAt: row.created_at,
+  };
+}
+
+function mapCalendarBlock(row: CalendarBlockRow): CalendarBlock {
+  return {
+    id: row.id,
+    calendarId: row.calendar_id,
+    day: row.day,
+    start: row.start_min,
+    end: row.end_min,
+    label: row.label,
+    note: row.note,
+  };
+}
+
+/**
+ * Individual calendars with their weekly blocks attached (Monday-first, then by
+ * start time). `publishedOnly` restricts to the calendars visible to everyone —
+ * the Settings viewer passes it; the admin editor reads them all.
+ */
+function loadCalendars(publishedOnly: boolean): CalendarFull[] {
+  const db = getDb();
+  const calendars = (
+    publishedOnly
+      ? db.prepare("SELECT * FROM calendars WHERE published = 1 ORDER BY sort, id").all()
+      : db.prepare("SELECT * FROM calendars ORDER BY sort, id").all()
+  ) as CalendarRow[];
+  if (calendars.length === 0) return [];
+
+  const blocksByCal = new Map<number, CalendarBlock[]>();
+  const blockRows = db
+    .prepare("SELECT * FROM calendar_blocks ORDER BY start_min")
+    .all() as CalendarBlockRow[];
+  for (const row of blockRows) {
+    const list = blocksByCal.get(row.calendar_id) ?? [];
+    list.push(mapCalendarBlock(row));
+    blocksByCal.set(row.calendar_id, list);
+  }
+
+  return calendars.map((row) => {
+    const blocks = (blocksByCal.get(row.id) ?? []).sort(
+      (a, b) => monFirstIndex(a.day) - monFirstIndex(b.day) || a.start - b.start
+    );
+    return { ...mapCalendar(row), blocks };
+  });
+}
+
+/** Every individual calendar (admin editor). */
+export function getCalendars(): CalendarFull[] {
+  return loadCalendars(false);
+}
+
+/** Only the calendars marked visible to everyone (the Settings viewer). */
+export function getPublishedCalendars(): CalendarFull[] {
+  return loadCalendars(true);
+}
+
 export const getTaskTypes = cache((): TaskType[] => {
   return getDb().prepare("SELECT * FROM task_types ORDER BY sort, id").all() as TaskType[];
 });
@@ -433,6 +525,8 @@ export function exportAll() {
     subjects: db.prepare("SELECT * FROM subjects").all(),
     periods: db.prepare("SELECT * FROM periods").all(),
     dayMarks: db.prepare("SELECT * FROM day_marks").all(),
+    calendars: db.prepare("SELECT * FROM calendars").all(),
+    calendarBlocks: db.prepare("SELECT * FROM calendar_blocks").all(),
     taskTypes: db.prepare("SELECT * FROM task_types").all(),
     taskSeries: db.prepare("SELECT * FROM task_series").all(),
     tasks: db.prepare("SELECT * FROM tasks").all(),

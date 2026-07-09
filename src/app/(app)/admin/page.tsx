@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { isAdmin } from "@/lib/auth";
 import { listApiTokens } from "@/lib/auth/tokens";
 import {
+  getCalendars,
   getCounts,
   getDayMarks,
   getPeriods,
@@ -31,6 +32,7 @@ export default async function AdminPage() {
       teachers={getTeachers()}
       strands={getStrands()}
       dayMarks={getDayMarks()}
+      calendars={getCalendars()}
       settings={getSettings()}
       counts={getCounts()}
       tokens={listApiTokens()}

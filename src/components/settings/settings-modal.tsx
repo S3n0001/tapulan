@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { SlidersHorizontal, X } from "lucide-react";
-import type { Strand, StrandCode } from "@/lib/domain/types";
+import type { CalendarFull, Strand, StrandCode } from "@/lib/domain/types";
 import { usePresence } from "@/hooks/use-presence";
 import { IconButton } from "@/components/ui/icon-button";
 import { SettingsContent } from "./settings-content";
@@ -41,9 +41,11 @@ const FOCUSABLE = 'button, [href], input, select, textarea, [tabindex]:not([tabi
 export function SettingsModal({
   strands,
   current,
+  calendars,
 }: {
   strands: Strand[];
   current: StrandCode | null;
+  calendars: CalendarFull[];
 }) {
   const [open, setOpen] = useState(false);
   const { mounted, state } = usePresence(open);
@@ -142,7 +144,7 @@ export function SettingsModal({
         </header>
 
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4">
-          <SettingsContent strands={strands} current={current} />
+          <SettingsContent strands={strands} current={current} calendars={calendars} />
         </div>
       </div>
     </div>,

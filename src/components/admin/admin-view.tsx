@@ -6,6 +6,7 @@ import { Lock, LogOut } from "lucide-react";
 import { login, logout } from "@/actions/admin";
 import type { ApiToken } from "@/lib/auth/tokens";
 import type {
+  CalendarFull,
   DayMark,
   PeriodFull,
   Settings,
@@ -23,6 +24,7 @@ import { useToast } from "@/components/ui/toast";
 import { TasksView } from "@/components/tasks/tasks-view";
 import { ScheduleTab } from "./schedule-tab";
 import { SubjectsTab } from "./subjects-tab";
+import { CalendarsTab } from "./calendars-tab";
 import { SettingsTab } from "./settings-tab";
 
 /* ----------------------------------------------------------------- login */
@@ -95,12 +97,13 @@ export function AdminLogin() {
 
 /* ------------------------------------------------------------- dashboard */
 
-type TabId = "tasks" | "schedule" | "subjects" | "settings";
+type TabId = "tasks" | "schedule" | "subjects" | "calendars" | "settings";
 
 const TABS: { id: TabId; label: string }[] = [
   { id: "tasks", label: "Tasks" },
   { id: "schedule", label: "Schedule" },
   { id: "subjects", label: "Subjects" },
+  { id: "calendars", label: "Calendars" },
   { id: "settings", label: "Settings" },
 ];
 
@@ -113,6 +116,7 @@ export function AdminDashboard({
   teachers,
   strands,
   dayMarks,
+  calendars,
   settings,
   counts,
   tokens,
@@ -125,6 +129,7 @@ export function AdminDashboard({
   teachers: Teacher[];
   strands: Strand[];
   dayMarks: DayMark[];
+  calendars: CalendarFull[];
   settings: Settings;
   counts: { tasks: number; periods: number; subjects: number };
   tokens: ApiToken[];
@@ -204,6 +209,7 @@ export function AdminDashboard({
         {tab === "subjects" && (
           <SubjectsTab subjects={subjects} teachers={teachers} strands={strands} />
         )}
+        {tab === "calendars" && <CalendarsTab calendars={calendars} />}
         {tab === "settings" && <SettingsTab settings={settings} counts={counts} tokens={tokens} />}
       </div>
     </ViewChrome>
