@@ -21,8 +21,11 @@ export const metadata: Metadata = {
   applicationName: "Tapulan",
   appleWebApp: { capable: true, title: "Tapulan", statusBarStyle: "black-translucent" },
   formatDetection: { telephone: false },
-  // Browser-tab favicon + home-screen icon, all a square crop of madam's photo
-  // (the earlier dog artwork is retired for now but preserved in git history).
+  // Browser-tab favicon + home-screen icon: a tight circular crop of madam's
+  // face (the .ico + icon.png carry transparent corners so the tab shows a
+  // clean circle). apple-icon stays a full-bleed square because iOS fills
+  // transparency and applies its own rounded mask. The earlier dog artwork is
+  // retired for now but preserved in git history.
   // An explicit `icons` entry is what makes Next emit the <link rel="icon">;
   // the multi-size .ico stays crisp at 16–48px where a lone 512 PNG would be
   // muddily downscaled, and apple-icon covers iOS "Add to Home Screen".
