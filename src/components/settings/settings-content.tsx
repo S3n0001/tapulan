@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState, useTransition, type ReactNode } from "react";
-import { Layers } from "lucide-react";
 import { useTheme } from "next-themes";
 import { setStrand } from "@/actions/session";
 import type { CalendarFull, Strand, StrandCode } from "@/lib/domain/types";
@@ -116,12 +115,11 @@ export function SettingsContent({
             value={current ?? ""}
             onChange={(code) => startStrand(() => setStrand(code))}
             options={[
-              { value: "", label: "Whole section", hint: "all strands", icon: <Layers className="size-3.5" strokeWidth={1.75} /> },
+              { value: "", label: "Whole section", hint: "all strands" },
               ...strands.map((s) => ({
                 value: s.code,
                 label: <span className="font-mono text-[12.5px] font-semibold">{s.code}</span>,
                 hint: s.name,
-                hue: s.hue,
               })),
             ]}
           />

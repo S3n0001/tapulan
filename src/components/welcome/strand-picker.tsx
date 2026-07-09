@@ -209,7 +209,6 @@ export function StrandPicker({ strands }: { strands: Strand[] }) {
 function StrandContent({ strand, trailing }: { strand: Strand; trailing: React.ReactNode }) {
   return (
     <>
-      <span className="a-dot size-2 shrink-0 rounded-full" aria-hidden />
       <span className="min-w-0 flex-1">
         <span className="flex items-baseline gap-2">
           <span className="font-mono text-[12px] font-semibold text-ink">{strand.code}</span>
@@ -227,7 +226,6 @@ function StrandContent({ strand, trailing }: { strand: Strand; trailing: React.R
 function WholeContent({ committing }: { committing: boolean }) {
   return (
     <>
-      <Layers className="size-4 shrink-0 text-muted" strokeWidth={1.75} aria-hidden />
       <span className="min-w-0 flex-1">
         <span className="block text-[13px] font-medium text-ink">Whole section</span>
         <span className="mt-0.5 block truncate text-[11.5px] text-faint">
