@@ -300,7 +300,7 @@ function mapCalendarBlock(row: CalendarBlockRow): CalendarBlock {
 /**
  * Individual calendars with their weekly blocks attached (Monday-first, then by
  * start time). `publishedOnly` restricts to the calendars visible to everyone —
- * the Settings viewer passes it; the admin editor reads them all.
+ * the Schedules view passes it; the admin editor reads them all.
  */
 function loadCalendars(publishedOnly: boolean): CalendarFull[] {
   const db = getDb();
@@ -334,7 +334,7 @@ export function getCalendars(): CalendarFull[] {
   return loadCalendars(false);
 }
 
-/** Only the calendars marked visible to everyone (the Settings viewer). */
+/** Only the calendars marked visible to everyone (the Schedules view). */
 export function getPublishedCalendars(): CalendarFull[] {
   return loadCalendars(true);
 }

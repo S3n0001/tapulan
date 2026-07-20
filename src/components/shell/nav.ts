@@ -1,4 +1,5 @@
 import {
+  CalendarClock,
   CalendarDays,
   CalendarRange,
   Clock3,
@@ -19,8 +20,9 @@ export const NAV: NavEntry[] = [
   { href: "/", label: "Today", icon: Clock3, shortcut: "1" },
   { href: "/week", label: "Week", icon: CalendarDays, shortcut: "2" },
   { href: "/calendar", label: "Calendar", icon: CalendarRange, shortcut: "3" },
-  { href: "/tasks", label: "Tasks", icon: ListTodo, shortcut: "4" },
-  { href: "/classes", label: "Classes", icon: Library, shortcut: "5" },
+  { href: "/schedules", label: "Schedules", icon: CalendarClock, shortcut: "4" },
+  { href: "/tasks", label: "Tasks", icon: ListTodo, shortcut: "5" },
+  { href: "/classes", label: "Classes", icon: Library, shortcut: "6" },
 ];
 
 export function isNavActive(href: string, pathname: string): boolean {

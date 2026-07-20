@@ -58,7 +58,7 @@ export function CalendarsTab({ calendars }: { calendars: CalendarFull[] }) {
           }
         >
           Add a personal weekly schedule — your work hours, someone&apos;s timetable, a duty rota.
-          Mark it visible to share it with the whole section under Settings.
+          Mark it visible to share it with the whole section on the Schedules tab.
         </EmptyState>
       ) : (
         <div className="space-y-3 p-3.5 lg:p-4">
@@ -213,7 +213,7 @@ function VisibilityChip({ published }: { published: boolean }) {
       )}
       title={
         published
-          ? "Visible to everyone under Settings"
+          ? "Visible to everyone on the Schedules tab"
           : "Admin-only draft — not shown to the section"
       }
     >
