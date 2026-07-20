@@ -145,8 +145,8 @@ export function TodayView({
           stretches both to equal height, so a light day still rests on a full
           card rather than a stub. Mobile stacks them in the edge-to-edge panel
           (a card would be bg-on-bg there), split only by the aside's hairline. */}
-      <div className="flex flex-1 flex-col lg:grid lg:grid-cols-[minmax(0,1fr)_336px] lg:gap-2">
-        <section className="flex min-w-0 flex-col overflow-hidden lg:rounded-[var(--r-panel)] lg:border lg:border-line lg:bg-bg">
+      <div className="flex flex-1 flex-col lg:grid lg:min-h-0 lg:grid-cols-[minmax(0,1fr)_336px] lg:grid-rows-1 lg:gap-2">
+        <section className="flex min-w-0 flex-col overflow-hidden lg:min-h-0 lg:overflow-y-auto lg:rounded-[var(--r-panel)] lg:border lg:border-line lg:bg-bg">
           {!isToday && (
             <p className="flex items-center gap-2 border-b border-line bg-surface/50 px-3.5 py-2 text-[12.5px] text-muted lg:px-4">
               <CalendarDays className="size-3.5 shrink-0 text-faint" />
@@ -187,9 +187,8 @@ export function TodayView({
           <div aria-hidden className="canvas-floor hidden min-h-16 flex-1 lg:block" />
         </section>
 
-        <aside className="flex flex-1 flex-col overflow-hidden border-t border-line lg:rounded-[var(--r-panel)] lg:border lg:border-line lg:bg-bg">
+        <aside className="flex min-h-0 flex-1 flex-col overflow-hidden border-t border-line lg:rounded-[var(--r-panel)] lg:border lg:border-line lg:bg-bg">
           <DueRail tasks={tasks} now={now} />
-          <div aria-hidden className="canvas-floor min-h-16 flex-1" />
         </aside>
       </div>
     </ViewChrome>
@@ -618,8 +617,8 @@ function DueRail({ tasks, now }: { tasks: TaskFull[]; now: Date }) {
   const open = (id: number) => router.push(`/tasks?task=${id}`);
 
   return (
-    <>
-      <div className="flex h-9 items-center gap-2 border-b border-line/70 px-3.5 lg:px-4">
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="flex h-9 shrink-0 items-center gap-2 border-b border-line/70 px-3.5 lg:px-4">
         <h2 className="font-mono text-[10.5px] font-semibold uppercase tracking-[0.06em] text-faint">
           Due soon
         </h2>
@@ -643,80 +642,85 @@ function DueRail({ tasks, now }: { tasks: TaskFull[]; now: Date }) {
         </div>
       </div>
 
-      {od.length === 0 && within.length === 0 ? (
-        <EmptyState
-          icon={Inbox}
-          title={nearest ? "Nothing due soon" : "All clear"}
-          className="py-10"
-        >
-          {nearest ? (
-            <>
-              Next up is <span className="font-medium text-ink">{nearest.title}</span> ·{" "}
-              <span className="tnum font-mono">{fmtDateMed(nearest.dueDate)}</span>.{" "}
-              <Link href="/calendar" className="text-brand-text hover:underline">
-                Open the calendar
-              </Link>
-              .
-            </>
-          ) : (
-            <>New requirements show up here the moment an admin posts them.</>
-          )}
-        </EmptyState>
-      ) : (
-        <>
-          {od.length > 0 && (
-            <DueGroup label="Overdue" count={od.length} danger>
-              <ul className="divide-y divide-line/60">
-                {od.map((t) => (
-                  <DueRow
-                    key={t.id}
-                    task={t}
-                    now={now}
-                    done={isDone(t.id)}
-                    onToggle={() => toggle(t.id)}
-                    onOpen={() => open(t.id)}
-                  />
-                ))}
-              </ul>
-            </DueGroup>
-          )}
-
-          <DueGroup label={`Next ${horizon} days`} count={within.length}>
-            {within.length > 0 ? (
-              <ul className="divide-y divide-line/60">
-                {within.map((t) => (
-                  <DueRow
-                    key={t.id}
-                    task={t}
-                    now={now}
-                    done={isDone(t.id)}
-                    onToggle={() => toggle(t.id)}
-                    onOpen={() => open(t.id)}
-                  />
-                ))}
-              </ul>
+      {/* the list scrolls inside the rail so a long horizon never runs the whole
+          Today page tall — the header + horizon toggle stay pinned above it */}
+      <div className="flex min-h-0 flex-1 flex-col lg:overflow-y-auto">
+        {od.length === 0 && within.length === 0 ? (
+          <EmptyState
+            icon={Inbox}
+            title={nearest ? "Nothing due soon" : "All clear"}
+            className="py-10"
+          >
+            {nearest ? (
+              <>
+                Next up is <span className="font-medium text-ink">{nearest.title}</span> ·{" "}
+                <span className="tnum font-mono">{fmtDateMed(nearest.dueDate)}</span>.{" "}
+                <Link href="/calendar" className="text-brand-text hover:underline">
+                  Open the calendar
+                </Link>
+                .
+              </>
             ) : (
-              <p className="px-3.5 py-3 text-[12px] text-faint lg:px-4">
-                Clear for the next {horizon} days.
-              </p>
+              <>New requirements show up here the moment an admin posts them.</>
             )}
-          </DueGroup>
+          </EmptyState>
+        ) : (
+          <>
+            {od.length > 0 && (
+              <DueGroup label="Overdue" count={od.length} danger>
+                <ul className="divide-y divide-line/60">
+                  {od.map((t) => (
+                    <DueRow
+                      key={t.id}
+                      task={t}
+                      now={now}
+                      done={isDone(t.id)}
+                      onToggle={() => toggle(t.id)}
+                      onOpen={() => open(t.id)}
+                    />
+                  ))}
+                </ul>
+              </DueGroup>
+            )}
 
-          {later.length > 0 && (
-            <Link
-              href="/calendar"
-              className="flex items-center gap-2 border-t border-line/70 px-3.5 py-2.5 text-[12px] text-muted transition-colors hover:bg-surface/60 hover:text-ink lg:px-4"
-            >
-              <CalendarRange className="size-3.5 text-faint" />
-              <span>
-                <span className="tnum font-mono font-medium text-ink">{later.length}</span> due later
-              </span>
-              <ArrowRight className="ml-auto size-3.5 text-faint" />
-            </Link>
-          )}
-        </>
-      )}
-    </>
+            <DueGroup label={`Next ${horizon} days`} count={within.length}>
+              {within.length > 0 ? (
+                <ul className="divide-y divide-line/60">
+                  {within.map((t) => (
+                    <DueRow
+                      key={t.id}
+                      task={t}
+                      now={now}
+                      done={isDone(t.id)}
+                      onToggle={() => toggle(t.id)}
+                      onOpen={() => open(t.id)}
+                    />
+                  ))}
+                </ul>
+              ) : (
+                <p className="px-3.5 py-3 text-[12px] text-faint lg:px-4">
+                  Clear for the next {horizon} days.
+                </p>
+              )}
+            </DueGroup>
+
+            {later.length > 0 && (
+              <Link
+                href="/calendar"
+                className="flex items-center gap-2 border-t border-line/70 px-3.5 py-2.5 text-[12px] text-muted transition-colors hover:bg-surface/60 hover:text-ink lg:px-4"
+              >
+                <CalendarRange className="size-3.5 text-faint" />
+                <span>
+                  <span className="tnum font-mono font-medium text-ink">{later.length}</span> due later
+                </span>
+                <ArrowRight className="ml-auto size-3.5 text-faint" />
+              </Link>
+            )}
+          </>
+        )}
+        <div aria-hidden className="canvas-floor min-h-16 flex-1" />
+      </div>
+    </div>
   );
 }
 

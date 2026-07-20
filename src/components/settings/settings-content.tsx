@@ -3,10 +3,7 @@
 import { useEffect, useState, useTransition, type ReactNode } from "react";
 import { useTheme } from "next-themes";
 import { setStrand } from "@/actions/session";
-import type { CalendarFull, Strand, StrandCode } from "@/lib/domain/types";
-import { blocksByDay, dayShort } from "@/lib/domain/calendar";
-import { fmtTimeRange } from "@/lib/domain/time";
-import { accentStyle } from "@/lib/domain/hues";
+import type { Strand, StrandCode } from "@/lib/domain/types";
 import { usePrefs } from "@/hooks/use-prefs";
 import { Segmented } from "@/components/ui/segmented";
 import { Select } from "@/components/ui/select";
@@ -25,12 +22,9 @@ import { Select } from "@/components/ui/select";
 export function SettingsContent({
   strands,
   current,
-  calendars,
 }: {
   strands: Strand[];
   current: StrandCode | null;
-  /** published individual calendars — read-only, section-wide (not device-local) */
-  calendars: CalendarFull[];
 }) {
   const { prefs, setPref } = usePrefs();
   const { theme, setTheme } = useTheme();
@@ -130,69 +124,6 @@ export function SettingsContent({
         These preferences are saved on this device only — they don’t change what anyone else in the
         section sees.
       </p>
-
-      {calendars.length > 0 && (
-        <Group
-          title="Personal schedules"
-          hint="Weekly calendars your section’s admins keep. Read-only here."
-        >
-          <div className="space-y-2.5 px-2 pt-0.5">
-            {calendars.map((cal) => (
-              <CalendarPeek key={cal.id} calendar={cal} />
-            ))}
-          </div>
-        </Group>
-      )}
-    </div>
-  );
-}
-
-/** One published individual calendar, read-only: its weekly blocks by day. */
-function CalendarPeek({ calendar }: { calendar: CalendarFull }) {
-  const groups = blocksByDay(calendar.blocks);
-  return (
-    <div className="overflow-hidden rounded-[var(--r-card)] border border-line bg-surface/50">
-      <div className="flex items-center gap-2 border-b border-line/70 px-2.5 py-2">
-        <span
-          style={accentStyle(calendar.hue)}
-          className="a-dot size-2 shrink-0 rounded-full"
-          aria-hidden
-        />
-        <span className="min-w-0">
-          <span className="block truncate text-[12.5px] font-semibold text-ink">
-            {calendar.name}
-          </span>
-          {calendar.subtitle && (
-            <span className="block truncate text-[11.5px] text-muted">{calendar.subtitle}</span>
-          )}
-        </span>
-      </div>
-      {groups.length === 0 ? (
-        <p className="px-2.5 py-2 text-[11.5px] text-faint">Nothing scheduled yet.</p>
-      ) : (
-        <ul className="divide-y divide-line/50">
-          {groups.map((group) => (
-            <li key={group.day} className="flex gap-2.5 px-2.5 py-1.5">
-              <span className="w-[30px] shrink-0 pt-[2px] font-mono text-[10px] font-semibold uppercase tracking-[0.04em] text-muted">
-                {dayShort(group.day)}
-              </span>
-              <div className="min-w-0 flex-1 space-y-1">
-                {group.blocks.map((block) => (
-                  <div key={block.id} className="flex items-baseline gap-2 text-[12px] leading-snug">
-                    <span className="tnum shrink-0 font-mono text-muted">
-                      {fmtTimeRange(block.start, block.end)}
-                    </span>
-                    <span className="min-w-0 flex-1 truncate text-ink">
-                      {block.label}
-                      {block.note && <span className="text-muted"> · {block.note}</span>}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
     </div>
   );
 }

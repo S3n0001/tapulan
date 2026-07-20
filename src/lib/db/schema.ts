@@ -138,13 +138,13 @@ CREATE TABLE IF NOT EXISTS login_attempts (
 -- person or purpose — a work roster, someone's class timetable, a duty rota.
 -- Separate from the section's class periods: any weekday including weekends,
 -- no subject/strand binding, and gated by the published flag (visible to
--- everyone in Settings when set, an admin-only draft otherwise).
+-- everyone on the Schedules view when set, an admin-only draft otherwise).
 CREATE TABLE IF NOT EXISTS calendars (
   id         INTEGER PRIMARY KEY AUTOINCREMENT,
   name       TEXT NOT NULL,
   subtitle   TEXT,                         -- optional: whose / what it is
   hue        TEXT NOT NULL DEFAULT 'slate',
-  published  INTEGER NOT NULL DEFAULT 0,   -- 1 = shown to everyone in Settings
+  published  INTEGER NOT NULL DEFAULT 0,   -- 1 = shown to everyone on the Schedules view
   sort       INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL
 );

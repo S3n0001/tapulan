@@ -207,7 +207,7 @@ export interface Calendar {
   /** optional secondary line — whose calendar it is, or what it covers */
   subtitle: string | null;
   hue: string;
-  /** visible to everyone in Settings when true; an admin-only draft otherwise */
+  /** visible to everyone on the Schedules view when true; an admin-only draft otherwise */
   published: boolean;
   sort: number;
   createdAt: string;

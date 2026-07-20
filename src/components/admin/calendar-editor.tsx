@@ -88,7 +88,7 @@ export function CalendarEditor({
     const yes = await confirm({
       title: `Delete “${calendar.name}”?`,
       description:
-        "The calendar and all its blocks are removed. If it was visible, it disappears from everyone's Settings. This can't be undone.",
+        "The calendar and all its blocks are removed. If it was visible, it disappears from the Schedules tab for everyone. This can't be undone.",
       confirmLabel: "Delete calendar",
       danger: true,
     });
@@ -159,8 +159,8 @@ export function CalendarEditor({
             label="Visible to everyone"
           />
           <p className="mt-1.5 pl-[22px] text-[12px] leading-snug text-muted">
-            When on, anyone can see this schedule under Settings → Personal schedules. Off keeps it
-            an admin-only draft.
+            When on, anyone can see this schedule on the Schedules tab. Off keeps it an admin-only
+            draft.
           </p>
         </div>
       </div>
